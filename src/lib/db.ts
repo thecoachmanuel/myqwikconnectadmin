@@ -86,7 +86,7 @@ const defaultData: DatabaseData = {
       is_social_media: 1,
       post_description_limit: 200,
       post_upload_image_limit: 4,
-      include_fake_user_in_matching: 0,
+      include_fake_user_in_matching: 1,
       stream_and_gift_commission: 10,
       play_store_download_link: '',
       app_store_download_link: '',
@@ -341,6 +341,22 @@ const defaultData: DatabaseData = {
     { id: 3, title: 'French', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { id: 4, title: 'German', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { id: 5, title: 'Arabic', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 6, title: 'Hindi', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 7, title: 'Portuguese', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 8, title: 'Russian', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 9, title: 'Japanese', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 10, title: 'Korean', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 11, title: 'Simplified Chinese', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 12, title: 'Italian', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 13, title: 'Dutch', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 14, title: 'Danish', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 15, title: 'Greek', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 16, title: 'Indonesian', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 17, title: 'Norwegian Bokmal', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 18, title: 'Polish', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 19, title: 'Thai', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 20, title: 'Turkish', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: 21, title: 'Vietnamese', is_deleted: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   ],
   diamond_packs: [
     { id: 1, amount: 100, android_product_id: 'com.orange.diamond100', ios_product_id: 'com.orange.diamond100' },
@@ -641,15 +657,16 @@ export async function commitDb(updated?: DatabaseData): Promise<void> {
           { upsert: true }
         );
 
-        // Asynchronously mirror key collections to MongoDB for direct MongoDB queries & management
+        // Mirror key collections to MongoDB for direct MongoDB queries & management
         const syncCols = [
           'users', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
           'interests', 'package', 'diamond_packs', 'reports',
           'verification_request', 'live_application', 'live_history',
-          'redeem_requests'
+          'redeem_requests', 'languages', 'religions', 'relationship_goals',
+          'pages', 'liked_profiles', 'following_lists'
         ];
 
-        Promise.all(
+        await Promise.all(
           syncCols.map(async (col) => {
             const list = (dbCache as any)?.[col];
             if (Array.isArray(list)) {
@@ -661,7 +678,7 @@ export async function commitDb(updated?: DatabaseData): Promise<void> {
               } catch {}
             }
           })
-        ).catch(() => {});
+        );
       }
     } catch (err: any) {
       console.warn('[MongoDB] Commit persistence notice:', err.message);

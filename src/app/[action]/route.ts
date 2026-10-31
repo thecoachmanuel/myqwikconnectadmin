@@ -123,7 +123,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const user = db.users.find((u) => u.id === userId);
     if (user) {
       user.is_block = action === 'blockUser' ? 1 : 0;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: action === 'blockUser' ? 'User blocked successfully' : 'User unblocked successfully',
@@ -139,7 +139,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const user = db.users.find((u) => u.id === userId);
     if (user) {
       user.can_go_live = action === 'allowLiveToUser' ? 2 : 0;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Live stream permission updated',
@@ -157,7 +157,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (user) {
       user.wallet = (user.wallet || 0) + coins;
       user.total_collected = (user.total_collected || 0) + coins;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Coins added successfully',
@@ -232,7 +232,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     });
 
     db.users.push(newUser);
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -273,7 +273,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (fields.city) user.city = fields.city;
       if (fields.password) user.password = fields.password;
       user.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'User updated successfully', data: user });
     }
     return jsonResponse({ status: false, message: 'User not found' });
@@ -288,7 +288,7 @@ async function handleAction(request: NextRequest, action: string, method: string
         image: files[0].url,
       };
       db.images.push(newImg);
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Image added', data: newImg });
     }
     return jsonResponse({ status: false, message: 'No file uploaded' });
@@ -297,7 +297,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteUserImage') {
     const imgId = parseInt(fields.id || fields.image_id || (request.nextUrl.searchParams.get('id') as string));
     db.images = db.images.filter((img) => img.id !== imgId);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Image deleted' });
   }
 
@@ -305,7 +305,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const userId = parseInt(fields.user_id || fields.id);
     db.users = db.users.filter((u) => u.id !== userId);
     db.images = db.images.filter((img) => img.user_id !== userId);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'User deleted' });
   }
 
@@ -339,7 +339,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const id = parseInt(fields.id || fields.post_id);
     db.posts = (db.posts || []).filter((p) => p.id !== id);
     db.post_contents = (db.post_contents || []).filter((c) => c.post_id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Post deleted successfully' });
   }
 
@@ -359,7 +359,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.interests.push(newInterest);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Interest added', data: newInterest });
   }
   if (action === 'updateInterest') {
@@ -368,7 +368,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (item) {
       item.title = fields.title || item.title;
       item.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Interest updated', data: item });
     }
     return jsonResponse({ status: false, message: 'Not found' });
@@ -378,7 +378,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const item = db.interests.find((i) => i.id === id);
     if (item) {
       item.is_deleted = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Interest deleted' });
     }
     return jsonResponse({ status: false, message: 'Not found' });
@@ -401,7 +401,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.relationship_goals.push(newGoal);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Goal added', data: newGoal });
   }
   if (action === 'updateRelationshipGoal') {
@@ -411,7 +411,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (fields.title) goal.title = fields.title;
       if (fields.description) goal.description = fields.description;
       goal.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Goal updated', data: goal });
     }
     return jsonResponse({ status: false, message: 'Goal not found' });
@@ -421,7 +421,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const goal = db.relationship_goals.find((g) => g.id === id);
     if (goal) {
       goal.is_deleted = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Goal deleted' });
     }
     return jsonResponse({ status: false, message: 'Goal not found' });
@@ -443,7 +443,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.religions.push(newRel);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Religion added', data: newRel });
   }
   if (action === 'updateReligion') {
@@ -452,7 +452,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (rel) {
       if (fields.title) rel.title = fields.title;
       rel.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Religion updated', data: rel });
     }
     return jsonResponse({ status: false, message: 'Religion not found' });
@@ -462,7 +462,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const rel = db.religions.find((r) => r.id === id);
     if (rel) {
       rel.is_deleted = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Religion deleted' });
     }
     return jsonResponse({ status: false, message: 'Religion not found' });
@@ -484,7 +484,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.languages.push(newLang);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Language added', data: newLang });
   }
   if (action === 'updateLanguage') {
@@ -493,7 +493,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (lang) {
       if (fields.title) lang.title = fields.title;
       lang.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Language updated', data: lang });
     }
     return jsonResponse({ status: false, message: 'Language not found' });
@@ -503,7 +503,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const lang = db.languages.find((l) => l.id === id);
     if (lang) {
       lang.is_deleted = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Language deleted' });
     }
     return jsonResponse({ status: false, message: 'Language not found' });
@@ -528,7 +528,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.onboarding_screens.push(newScreen);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Onboarding screen added', data: newScreen });
   }
   if (action === 'updateOnboardingScreen') {
@@ -540,7 +540,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (files.length > 0) screen.image = files[0].url;
       else if (fields.image) screen.image = fields.image;
       screen.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Onboarding screen updated', data: screen });
     }
     return jsonResponse({ status: false, message: 'Screen not found' });
@@ -548,7 +548,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteOnboardingScreen') {
     const id = parseInt(fields.id);
     db.onboarding_screens = db.onboarding_screens.filter((s) => s.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Onboarding screen deleted' });
   }
 
@@ -563,7 +563,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteStoryFromAdmin' || action === 'deleteStory') {
     const id = parseInt(fields.id || fields.story_id);
     db.stories = (db.stories || []).filter((s) => s.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Story deleted' });
   }
 
@@ -579,7 +579,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       ios_product_id: fields.ios_product_id || '',
     };
     db.diamond_packs.push(newPack);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Diamond pack added', data: newPack });
   }
   if (action === 'updateDiamondPack') {
@@ -589,7 +589,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (fields.amount) pack.amount = parseInt(fields.amount);
       if (fields.android_product_id) pack.android_product_id = fields.android_product_id;
       if (fields.ios_product_id) pack.ios_product_id = fields.ios_product_id;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Diamond pack updated', data: pack });
     }
     return jsonResponse({ status: false, message: 'Pack not found' });
@@ -597,7 +597,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteDiamondPack') {
     const id = parseInt(fields.id);
     db.diamond_packs = db.diamond_packs.filter((p) => p.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Diamond pack deleted' });
   }
 
@@ -615,7 +615,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       updated_at: new Date().toISOString(),
     };
     db.gifts.push(newGift);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Gift added', data: newGift });
   }
   if (action === 'updateGift') {
@@ -626,7 +626,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (files.length > 0) gift.image = files[0].url;
       else if (fields.image) gift.image = fields.image;
       gift.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Gift updated', data: gift });
     }
     return jsonResponse({ status: false, message: 'Gift not found' });
@@ -634,7 +634,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteGift') {
     const id = parseInt(fields.id);
     db.gifts = db.gifts.filter((g) => g.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Gift deleted' });
   }
 
@@ -670,7 +670,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       const user = db.users.find((u) => u.id === app.user_id);
       if (user) user.can_go_live = 2;
       db.live_application = db.live_application.filter((a) => a.id !== id);
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Application approved' });
     }
     return jsonResponse({ status: false, message: 'Application not found' });
@@ -678,7 +678,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteLiveApplication') {
     const id = parseInt(fields.id);
     db.live_application = db.live_application.filter((a) => a.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Application rejected/deleted' });
   }
 
@@ -711,7 +711,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       req.status = 1;
       req.amount_paid = fields.amount_paid ? parseFloat(fields.amount_paid) : req.coin_amount;
       req.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Redeem marked as completed' });
     }
     return jsonResponse({ status: false, message: 'Request not found' });
@@ -719,7 +719,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteRedeemRequest') {
     const id = parseInt(fields.id);
     db.redeem_requests = db.redeem_requests.filter((r) => r.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Redeem request deleted' });
   }
 
@@ -738,7 +738,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       v.status = 1;
       const user = db.users.find((u) => u.id === v.user_id);
       if (user) user.is_verified = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Verification approved' });
     }
     return jsonResponse({ status: false, message: 'Not found' });
@@ -750,7 +750,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       v.status = 2;
       const user = db.users.find((u) => u.id === v.user_id);
       if (user) user.is_verified = 0;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Verification rejected' });
     }
     return jsonResponse({ status: false, message: 'Not found' });
@@ -767,7 +767,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deleteReport' || action === 'rejectUserReport') {
     const id = parseInt(fields.id);
     db.reports = db.reports.filter((r) => r.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Report dismissed' });
   }
 
@@ -785,13 +785,13 @@ async function handleAction(request: NextRequest, action: string, method: string
     };
     db.admin_notification.push(newNotif);
 
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Notification sent', data: newNotif });
   }
   if (action === 'deleteNotification') {
     const id = parseInt(fields.id);
     db.admin_notification = db.admin_notification.filter((n) => n.id !== id);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Notification deleted' });
   }
 
@@ -801,7 +801,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (appdata) {
       appdata.is_dating = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -811,7 +811,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (appdata) {
       appdata.is_social_media = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -821,7 +821,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (appdata) {
       appdata.include_fake_user_in_matching = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -836,7 +836,7 @@ async function handleAction(request: NextRequest, action: string, method: string
         }
       });
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
     }
     return jsonResponse({ status: false, message: 'Setting not found' });
@@ -846,7 +846,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const admin = db.admin_user[0];
     if (admin && fields.new_password) {
       admin.user_password = fields.new_password;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Password updated successfully' });
     }
     return jsonResponse({ status: false, message: 'Failed to update password' });
@@ -892,7 +892,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const p = db.pages[0];
     if (p) {
       p.privacy = fields.privacy || p.privacy;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Privacy policy updated' });
     }
   }
@@ -901,7 +901,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const p = db.pages[0];
     if (p) {
       p.termsofuse = fields.termsofuse || p.termsofuse;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Terms of use updated' });
     }
   }

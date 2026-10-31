@@ -40,6 +40,22 @@ const nextConfig = {
         source: '/index',
         destination: '/dashboard',
       },
+      {
+        source: '/public/storage/:path*',
+        destination: '/storage/:path*',
+      },
+      {
+        source: '/public/uploads/:path*',
+        destination: '/uploads/:path*',
+      },
+      {
+        source: '/public/asset/:path*',
+        destination: '/asset/:path*',
+      },
+      {
+        source: '/public/:path*',
+        destination: '/:path*',
+      },
     ];
   },
 };

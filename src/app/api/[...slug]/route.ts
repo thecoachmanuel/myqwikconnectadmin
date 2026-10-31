@@ -70,7 +70,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       user.device_token = device_token || user.device_token;
       user.device_type = device_type || user.device_type;
       user.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     } else {
       const appdata = db.appdata[0];
       const freeCoins = appdata?.new_user_free_coins || 250;
@@ -130,7 +130,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         images: [],
       };
       db.users.push(user);
-      commitDb(db);
+      await commitDb(db);
     }
 
     // Attach user images
@@ -172,7 +172,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (!user.images || user.images.length === 0) {
       user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
     }
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -183,7 +183,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 4. getProfile / fetchMyUserProfile / getUserDetails
   if (endpoint === 'getProfile' || endpoint === 'fetchMyUserProfile' || endpoint === 'getUserDetails') {
-    const userId = parseInt(fields.user_id || fields.my_user_id || fields.id);
+    const targetUserId = parseInt(fields.user_id || fields.id) || 0;
+    const myUserId = parseInt(fields.my_user_id) || (endpoint === 'fetchMyUserProfile' ? targetUserId : 0);
+    const userId = targetUserId > 0 ? targetUserId : myUserId;
     const user = db.users.find((u) => u.id === userId);
 
     if (!user) {
@@ -194,15 +196,50 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       });
     }
 
-    user.images = db.images.filter((img) => img.user_id === user.id);
-    if (!user.images || user.images.length === 0) {
-      user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+    const userImgs = db.images.filter((img) => img.user_id === user.id);
+    const userStories = (db.stories || []).filter((s) => s.user_id === user.id);
+
+    // Compute followingStatus matching PHP:
+    // 0: neither follows, 1: target follows me, 2: I follow target, 3: mutual follow
+    let followingStatus = 0;
+    if (myUserId > 0 && myUserId !== user.id) {
+      const targetFollowsMe = (db.following_lists || []).some(
+        (f) => f.my_user_id === user.id && f.user_id === myUserId
+      );
+      const iFollowTarget = (db.following_lists || []).some(
+        (f) => f.my_user_id === myUserId && f.user_id === user.id
+      );
+
+      if (targetFollowsMe && iFollowTarget) {
+        followingStatus = 3;
+      } else if (iFollowTarget) {
+        followingStatus = 2;
+      } else if (targetFollowsMe) {
+        followingStatus = 1;
+      }
     }
+
+    // Compute is_like matching PHP (boolean)
+    let isLike = false;
+    if (myUserId > 0) {
+      isLike = (db.liked_profiles || []).some(
+        (lp) => lp.my_user_id === myUserId && lp.user_id === user.id
+      );
+    }
+
+    const userData = {
+      ...user,
+      religion_key: String(user.religion_key || ''),
+      images: userImgs.length > 0 ? userImgs : [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }],
+      stories: userStories,
+      followingStatus: followingStatus,
+      is_like: isLike,
+    };
 
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
-      data: user,
+      data: userData,
     });
   }
 
@@ -253,7 +290,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
 
     user.updated_at = new Date().toISOString();
-    commitDb(db);
+    await commitDb(db);
 
     user.images = db.images.filter((img) => img.user_id === user.id);
     if (!user.images || user.images.length === 0) {
@@ -283,8 +320,73 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 7. getExplorePageProfileList / getRandomProfile
-  if (endpoint === 'getExplorePageProfileList' || endpoint === 'getRandomProfile') {
+  // 7a. getRandomProfile (returns single UserData object for random matching)
+  if (endpoint === 'getRandomProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const reqGender = parseInt(fields.gender) || 3;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const appdata = db.appdata[0];
+
+    const blockedIds = (currentUser?.blocked_users || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+    const hiddenIds = (currentUser?.hidden_user_ids || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    let list = db.users.filter(
+      (u) =>
+        u.id !== currentUserId &&
+        u.is_block === 0 &&
+        !blockedIds.includes(u.id) &&
+        !hiddenIds.includes(u.id)
+    );
+
+    if (appdata && appdata.include_fake_user_in_matching === 0) {
+      list = list.filter((u) => !u.is_fake);
+    }
+
+    if (reqGender === 1 || reqGender === 2) {
+      const byGender = list.filter((u) => u.gender === reqGender);
+      if (byGender.length > 0) {
+        list = byGender;
+      }
+    }
+
+    if (list.length === 0) {
+      return jsonResponse({
+        status: false,
+        message: 'No profile found',
+        data: null,
+      });
+    }
+
+    const picked = list[Math.floor(Math.random() * list.length)];
+    let userImgs = db.images.filter((img) => img.user_id === picked.id);
+    if (userImgs.length === 0) {
+      userImgs = [{ id: picked.id * 10, user_id: picked.id, image: 'uploads/user1.jpg' }];
+    }
+
+    const randomUserData = {
+      ...picked,
+      religion_key: String(picked.religion_key || ''),
+      images: userImgs,
+      is_like: (db.liked_profiles || []).some(
+        (lp) => lp.my_user_id === currentUserId && lp.user_id === picked.id
+      ),
+    };
+
+    return jsonResponse({
+      status: true,
+      message: 'data found successfully!',
+      data: randomUserData,
+    });
+  }
+
+  // 7b. getExplorePageProfileList (returns array of UserData for explore swipe deck)
+  if (endpoint === 'getExplorePageProfileList') {
     const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
     const currentUser = db.users.find((u) => u.id === currentUserId);
     const appdata = db.appdata[0];
@@ -326,6 +428,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
       return {
         ...u,
+        religion_key: String(u.religion_key || ''),
         images: userImgs,
         is_like: (db.liked_profiles || []).some(
           (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
@@ -335,7 +438,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     return jsonResponse({
       status: true,
-      message: 'Fetch successful',
+      message: 'Data found successfully!',
       data: result,
     });
   }
@@ -408,6 +511,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
       return {
         ...u,
+        religion_key: String(u.religion_key || ''),
         images: userImgs,
         is_like: (db.liked_profiles || []).some(
           (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
@@ -424,18 +528,47 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 7c. fetchUsersByCordinates (Explore on Map)
   if (endpoint === 'fetchUsersByCordinates') {
-    const list = db.users
-      .filter((u) => u.is_block === 0 && u.show_on_map !== 0)
-      .map((u) => {
-        let userImgs = db.images.filter((img) => img.user_id === u.id);
-        if (userImgs.length === 0) {
-          userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-        }
-        return {
-          ...u,
-          images: userImgs,
-        };
+    const lat = parseFloat(fields.lat || fields.latitude);
+    const lon = parseFloat(fields.long || fields.longitude);
+    const km = parseFloat(fields.km) || 500;
+
+    function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    let users = db.users.filter((u) => u.is_block === 0 && u.show_on_map !== 0);
+
+    if (!isNaN(lat) && !isNaN(lon)) {
+      const nearby = users.filter((u) => {
+        const uLat = parseFloat(u.lattitude || '0');
+        const uLon = parseFloat(u.longitude || '0');
+        if (isNaN(uLat) || isNaN(uLon) || (uLat === 0 && uLon === 0)) return false;
+        return getDistanceKm(lat, lon, uLat, uLon) <= km;
       });
+      if (nearby.length > 0) {
+        users = nearby;
+      }
+    }
+
+    const list = users.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return {
+        ...u,
+        religion_key: String(u.religion_key || ''),
+        images: userImgs,
+      };
+    });
 
     return jsonResponse({
       status: true,
@@ -815,7 +948,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       if (endpoint === 'onOffVideoCalls') user.is_video_call = parseInt(fields.is_video_call) || 0;
       if (endpoint === 'updateLiveStatus') user.is_live_now = parseInt(fields.is_live_now) || 0;
 
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Status updated',
@@ -832,9 +965,16 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 15. placeRedeemRequest & fetchMyRedeemRequests
   if (endpoint === 'placeRedeemRequest') {
     const userId = parseInt(fields.user_id);
-    const coinAmount = parseInt(fields.coin_amount) || 0;
-    const paymentGateway = fields.payment_gateway?.toString() || 'PayPal';
-    const accountDetails = fields.account_details?.toString() || '';
+    const user = db.users.find((u) => u.id === userId);
+    const coinAmount = parseInt(fields.coin_amount) || (user?.wallet ?? 0);
+    let paymentGateway = fields.payment_gateway?.toString() || 'PayPal';
+    let accountDetails = fields.account_details?.toString() || '';
+
+    if (accountDetails.toLowerCase() === 'paypal' || accountDetails.toLowerCase().includes('bank')) {
+      const tmp = paymentGateway;
+      paymentGateway = accountDetails;
+      accountDetails = tmp;
+    }
 
     const newReq: any = {
       id: getNextId(db.redeem_requests),
@@ -851,11 +991,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     db.redeem_requests.push(newReq);
 
     // deduct from user wallet
-    const user = db.users.find((u) => u.id === userId);
     if (user) {
-      user.wallet = Math.max(0, user.wallet - coinAmount);
+      user.wallet = Math.max(0, (user.wallet || 0) - coinAmount);
     }
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -893,7 +1032,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.verification_request.push(newReq);
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -916,7 +1055,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.live_application.push(newReq);
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -938,7 +1077,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.live_history.push(newHistory);
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -970,7 +1109,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.reports.push(newReport);
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -1060,7 +1199,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         (f) => !(f.my_user_id === myId && f.user_id === targetId)
       );
     }
-    commitDb(db);
+    await commitDb(db);
 
     return jsonResponse({
       status: true,
@@ -1205,7 +1344,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         });
       });
     }
-    commitDb(db);
+    await commitDb(db);
 
     const postUser = db.users.find((u) => u.id === userId);
     const fullPost = {
@@ -1228,7 +1367,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (post) {
       post.likes_count = (post.likes_count || 0) + 1;
       post.is_like = 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Post Liked',
@@ -1244,7 +1383,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (post) {
       post.likes_count = Math.max(0, (post.likes_count || 0) - 1);
       post.is_like = 0;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Post Dislike',
@@ -1270,7 +1409,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       };
       db.comments.push(newComment);
       post.comments_count = (post.comments_count || 0) + 1;
-      commitDb(db);
+      await commitDb(db);
 
       const user = db.users.find((u) => u.id === userId);
       return jsonResponse({
@@ -1310,7 +1449,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         post.comments_count = Math.max(0, (post.comments_count || 0) - 1);
       }
       db.comments = db.comments.filter((c) => c.id !== commentId);
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Delete Comment Successfully' });
     }
     return jsonResponse({ status: false, message: 'Comment not found' });
@@ -1323,7 +1462,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     db.posts = db.posts.filter((p) => !(p.id === postId && p.user_id === userId));
     db.post_contents = db.post_contents.filter((c) => c.post_id !== postId);
     db.comments = db.comments.filter((c) => c.post_id !== postId);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Post Delete Successfully' });
   }
 
@@ -1436,7 +1575,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.stories.push(newStory);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Story created', data: newStory });
   }
 
@@ -1449,7 +1588,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       if (!viewers.includes(userId)) {
         viewers.push(userId);
         story.view_by_user_ids = viewers.join(',');
-        commitDb(db);
+        await commitDb(db);
       }
     }
     return jsonResponse({ status: true, message: 'Story viewed' });
@@ -1458,7 +1597,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   if (endpoint === 'deleteStory') {
     const storyId = parseInt(fields.story_id);
     db.stories = db.stories.filter((s) => s.id !== storyId);
-    commitDb(db);
+    await commitDb(db);
     return jsonResponse({ status: true, message: 'Story deleted' });
   }
 
@@ -1479,7 +1618,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (appdata) {
       appdata.is_dating = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -1489,7 +1628,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (appdata) {
       appdata.is_social_media = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -1499,7 +1638,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (appdata) {
       appdata.include_fake_user_in_matching = parseInt(fields.value) || 0;
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
   }
@@ -1513,7 +1652,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         }
       });
       appdata.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
     }
     return jsonResponse({ status: false, message: 'Setting not found' });
@@ -1536,7 +1675,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const user = db.users.find((u) => u.id === userId);
     if (user) {
       user.device_token = '';
-      commitDb(db);
+      await commitDb(db);
     }
     return jsonResponse({
       status: true,
