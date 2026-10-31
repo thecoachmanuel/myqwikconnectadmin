@@ -1062,6 +1062,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       return jsonResponse({
         status: true,
         message: 'Coins updated successfully',
+        wallet: user.wallet,
+        total_collected: user.total_collected,
         data: user,
       });
     }

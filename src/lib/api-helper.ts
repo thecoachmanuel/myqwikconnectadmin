@@ -95,7 +95,7 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
             }
 
             const mimeType = value.type || (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.mp4' ? 'video/mp4' : 'image/jpeg');
-            if (process.env.VERCEL || !isFsWritable || buffer.length <= 4 * 1024 * 1024) {
+            if (!isFsWritable && (process.env.VERCEL || buffer.length <= 4 * 1024 * 1024)) {
               relPath = `data:${mimeType};base64,${buffer.toString('base64')}`;
             }
 

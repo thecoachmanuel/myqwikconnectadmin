@@ -17,3 +17,4 @@ for (const c of allCities) {
 const csvPath = path.join(__dirname, '../../Orange/assets/csv/cities.csv');
 fs.writeFileSync(csvPath, lines.join('\n'), 'utf8');
 console.log('Successfully wrote to', csvPath);
+
