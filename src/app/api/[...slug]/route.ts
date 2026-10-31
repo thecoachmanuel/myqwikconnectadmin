@@ -1244,13 +1244,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 19. addUserReport
+  // 19. addUserReport & reportPost & getPackage
   if (endpoint === 'addUserReport') {
+    if (!db.reports) db.reports = [];
     const newReport: any = {
       id: getNextId(db.reports),
-      type: parseInt(fields.type) || 1,
+      type: 1, // 1: User / Profile report
       user_id: parseInt(fields.user_id) || 0,
-      post_id: parseInt(fields.post_id) || 0,
+      reported_by: parseInt(fields.reported_by || fields.my_user_id || fields.reporter_id) || null,
       reason: fields.reason || 'Other',
       description: fields.description || '',
       created_at: new Date().toISOString(),
@@ -1263,6 +1264,37 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       status: true,
       message: 'Report submitted successfully',
       data: newReport,
+    });
+  }
+
+  if (endpoint === 'reportPost') {
+    if (!db.reports) db.reports = [];
+    const postId = parseInt(fields.post_id || fields.id) || 0;
+    const newReport: any = {
+      id: getNextId(db.reports),
+      type: 0, // 0: Post report
+      post_id: postId,
+      reported_by: parseInt(fields.reported_by || fields.my_user_id || fields.reporter_id) || null,
+      reason: fields.reason || 'Other',
+      description: fields.description || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    db.reports.push(newReport);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Report submitted successfully',
+      data: newReport,
+    });
+  }
+
+  if (endpoint === 'getPackage') {
+    return jsonResponse({
+      status: true,
+      message: 'fetchSuccessful',
+      data: db.package || [],
     });
   }
 
@@ -2058,56 +2090,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 37. addUserReport & reportPost
-  if (endpoint === 'addUserReport') {
-    const userId = parseInt(fields.user_id);
-    const reason = fields.reason || '';
-    const description = fields.description || '';
 
-    const newReport: any = {
-      id: getNextId(db.reports || []),
-      user_id: userId,
-      type: 1, // 1: User / Profile report
-      reason,
-      description,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (!db.reports) db.reports = [];
-    db.reports.push(newReport);
-    await commitDb(db);
-
-    return jsonResponse({
-      status: true,
-      message: 'Report submitted successfully',
-      data: newReport,
-    });
-  }
-
-  if (endpoint === 'reportPost') {
-    const postId = parseInt(fields.post_id || fields.id);
-    const reason = fields.reason || '';
-    const description = fields.description || '';
-
-    const newReport: any = {
-      id: getNextId(db.reports || []),
-      post_id: postId,
-      type: 0, // 0: Post report
-      reason,
-      description,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (!db.reports) db.reports = [];
-    db.reports.push(newReport);
-    await commitDb(db);
-
-    return jsonResponse({
-      status: true,
-      message: 'Post reported successfully',
-      data: newReport,
-    });
-  }
 
   // 38. applyForLive
   if (endpoint === 'applyForLive') {

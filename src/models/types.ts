@@ -173,14 +173,16 @@ export interface VerificationRequest {
 
 export interface Report {
   id: number;
-  type: number; // 1 = user report, 2 = post report
+  type: number; // 1 = user report, 0 or 2 = post report
   user_id: number;
   post_id: number;
+  reported_by?: number | null;
   reason: string;
   description: string;
   created_at: string;
   updated_at: string;
   user?: User;
+  reporter?: any;
 }
 
 export interface Post {

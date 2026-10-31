@@ -603,6 +603,57 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: true, message: 'Diamond pack deleted' });
   }
 
+  // 10b. Subscription Packages: fetchAllPackage, addPackage, updatePackage, deletePackage, getPackageById
+  if (action === 'fetchAllPackage') {
+    return jsonResponse({ status: true, data: db.package || [] });
+  }
+  if (action === 'getPackageById') {
+    const id = parseInt(fields.id || (request.nextUrl.searchParams.get('id') as string));
+    const pack = (db.package || []).find((p: any) => p.id === id);
+    if (pack) {
+      return jsonResponse(pack);
+    }
+    return jsonResponse({ status: false, message: 'Package not found' });
+  }
+  if (action === 'addPackage') {
+    if (!db.package) db.package = [];
+    const newPack = {
+      id: getNextId(db.package),
+      title: fields.title || '',
+      description: fields.description || '',
+      price: parseFloat(fields.price) || 0,
+      months: parseInt(fields.months) || 1,
+      playid: fields.playid || '',
+      appid: fields.appid || '',
+    };
+    db.package.push(newPack);
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Subscription added successfully', data: newPack });
+  }
+  if (action === 'updatePackage') {
+    const id = parseInt(fields.id);
+    const pack = (db.package || []).find((p: any) => p.id === id);
+    if (pack) {
+      if (fields.title !== undefined) pack.title = fields.title;
+      if (fields.description !== undefined) pack.description = fields.description;
+      if (fields.price !== undefined) pack.price = parseFloat(fields.price);
+      if (fields.months !== undefined) pack.months = parseInt(fields.months);
+      if (fields.playid !== undefined) pack.playid = fields.playid;
+      if (fields.appid !== undefined) pack.appid = fields.appid;
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Subscription updated successfully', data: pack });
+    }
+    return jsonResponse({ status: false, message: 'Package not found' });
+  }
+  if (action === 'deletePackage') {
+    const id = parseInt(fields.id || (request.nextUrl.searchParams.get('id') as string));
+    if (db.package) {
+      db.package = db.package.filter((p: any) => p.id !== id);
+      await commitDb(db);
+    }
+    return jsonResponse({ status: true, message: 'Subscription deleted successfully' });
+  }
+
   // 11. Gifts: fetchAllGifts, addGift, updateGift, deleteGift
   if (action === 'fetchAllGifts') {
     return jsonResponse({ status: true, data: db.gifts });
@@ -803,9 +854,11 @@ async function handleAction(request: NextRequest, action: string, method: string
       .map((rep) => {
         const user = db.users.find((u) => u.id === rep.user_id);
         const userImgs = user ? db.images.filter((img) => img.user_id === user.id) : [];
+        const reporter = rep.reported_by ? db.users.find((u) => u.id === rep.reported_by) : null;
         return {
           ...rep,
           user: user ? { ...user, images: userImgs } : null,
+          reporter: reporter ? { id: reporter.id, fullname: reporter.fullname, identity: reporter.identity } : null,
         };
       });
     return jsonResponse({ status: true, data });

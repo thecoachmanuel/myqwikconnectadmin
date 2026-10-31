@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { getImageUrl } from '@/lib/image-helper';
 
@@ -32,6 +33,7 @@ export default function ReportPage() {
     return (
       rep.user?.fullname?.toLowerCase().includes(q) ||
       rep.user?.identity?.toLowerCase().includes(q) ||
+      rep.reporter?.fullname?.toLowerCase().includes(q) ||
       rep.reason?.toLowerCase().includes(q) ||
       rep.description?.toLowerCase().includes(q)
     );
@@ -49,7 +51,7 @@ export default function ReportPage() {
   };
 
   const handleBlockUser = async (userId: number, reportId: number) => {
-    if (confirm('Block this reported user?')) {
+    if (confirm('Block this reported user? They will be blocked from accessing the app.')) {
       await fetch('/blockUser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,7 +86,7 @@ export default function ReportPage() {
     <AdminLayout title="Reports">
       <div className="card">
         <div className="card-header d-flex align-items-center flex-wrap">
-          <h4>Reports</h4>
+          <h4>Reports Management</h4>
           <div className="ms-3 card-tab">
             <ul className="nav nav-tabs" id="myTab" role="tablist">
               <li className="nav-item" role="presentation">
@@ -93,7 +95,7 @@ export default function ReportPage() {
                   onClick={() => setActiveTab('user')}
                   type="button"
                 >
-                  User reports
+                  <i className="fas fa-user-shield mr-1"></i> User reports
                 </button>
               </li>
               <li className="nav-item" role="presentation">
@@ -102,7 +104,7 @@ export default function ReportPage() {
                   onClick={() => setActiveTab('post')}
                   type="button"
                 >
-                  Post reports
+                  <i className="fas fa-images mr-1"></i> Post reports
                 </button>
               </li>
             </ul>
@@ -118,7 +120,7 @@ export default function ReportPage() {
                   <input
                     type="search"
                     className="form-control form-control-sm ml-2"
-                    placeholder=""
+                    placeholder="Search reports..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -133,23 +135,24 @@ export default function ReportPage() {
                 <thead>
                   <tr>
                     <th>Image</th>
-                    <th>Identity</th>
-                    <th>Full Name</th>
+                    <th>Reported User</th>
+                    <th>Reported By</th>
                     <th>Reason</th>
                     <th>Description</th>
-                    <th style={{ width: '200px', textAlign: 'right' }}>Action</th>
+                    <th>Date</th>
+                    <th style={{ width: '250px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-4">
+                      <td colSpan={7} className="text-center py-4">
                         Loading...
                       </td>
                     </tr>
                   ) : filteredReports.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-4">
+                      <td colSpan={7} className="text-center py-4">
                         No user reports found.
                       </td>
                     </tr>
@@ -160,38 +163,95 @@ export default function ReportPage() {
                           ? rep.user.images[0].image
                           : '/asset/img/user.png';
                       const avatarSrc = getImageUrl(avatar);
+                      const isBlocked = rep.user?.is_block === 1;
 
                       return (
                         <tr key={rep.id}>
                           <td>
-                            <img
-                              src={avatarSrc}
-                              alt=""
-                              width={45}
-                              height={45}
-                              className="rounded-circle"
-                              style={{ objectFit: 'cover' }}
-                              onError={(e: any) => {
-                                e.currentTarget.src = '/asset/img/user.png';
-                              }}
-                            />
+                            <Link href={`/viewuser?id=${rep.user_id}`}>
+                              <img
+                                src={avatarSrc}
+                                alt=""
+                                width={45}
+                                height={45}
+                                className="rounded-circle"
+                                style={{ objectFit: 'cover' }}
+                                onError={(e: any) => {
+                                  e.currentTarget.src = '/asset/img/user.png';
+                                }}
+                              />
+                            </Link>
                           </td>
-                          <td>{rep.user?.identity || rep.user?.username || 'N/A'}</td>
-                          <td>{rep.user?.fullname || `User #${rep.user_id}`}</td>
-                          <td><span className="badge badge-warning text-dark">{rep.reason || 'Report'}</span></td>
-                          <td>{rep.description || 'No description provided'}</td>
+                          <td>
+                            <Link
+                              href={`/viewuser?id=${rep.user_id}`}
+                              className="font-weight-600 text-primary"
+                            >
+                              {rep.user?.fullname || `User #${rep.user_id}`}
+                            </Link>
+                            <div className="small text-muted">
+                              {rep.user?.identity || 'No identity'}
+                              {isBlocked && (
+                                <span className="badge badge-danger text-white ml-2">
+                                  Blocked
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            {rep.reporter ? (
+                              <Link
+                                href={`/viewuser?id=${rep.reporter.id}`}
+                                className="text-dark font-weight-500"
+                              >
+                                {rep.reporter.fullname}
+                                <div className="small text-muted">{rep.reporter.identity}</div>
+                              </Link>
+                            ) : rep.reported_by ? (
+                              <Link href={`/viewuser?id=${rep.reported_by}`}>
+                                User #{rep.reported_by}
+                              </Link>
+                            ) : (
+                              <span className="text-muted">User</span>
+                            )}
+                          </td>
+                          <td>
+                            <span className="badge badge-warning text-dark font-weight-600">
+                              {rep.reason || 'Report'}
+                            </span>
+                          </td>
+                          <td style={{ maxWidth: '300px' }}>
+                            <div className="text-wrap">
+                              {rep.description || 'No description provided'}
+                            </div>
+                          </td>
+                          <td className="small text-muted">
+                            {rep.created_at
+                              ? new Date(rep.created_at).toLocaleDateString()
+                              : 'N/A'}
+                          </td>
                           <td style={{ textAlign: 'right' }}>
+                            <Link
+                              href={`/viewuser?id=${rep.user_id}`}
+                              className="btn btn-sm btn-outline-primary mr-2"
+                              title="View Profile"
+                            >
+                              <i className="fas fa-eye mr-1"></i> View
+                            </Link>
                             <button
                               onClick={() => handleDismiss(rep.id)}
                               className="btn btn-sm btn-info text-white mr-2"
+                              title="Dismiss Report"
                             >
                               Dismiss
                             </button>
                             <button
                               onClick={() => handleBlockUser(rep.user_id, rep.id)}
                               className="btn btn-sm btn-danger"
+                              title="Block Reported User"
+                              disabled={isBlocked}
                             >
-                              Block User
+                              {isBlocked ? 'Blocked' : 'Block User'}
                             </button>
                           </td>
                         </tr>
@@ -204,22 +264,23 @@ export default function ReportPage() {
               <table className="table table-striped w-100" id="fetchPostReport">
                 <thead>
                   <tr>
-                    <th style={{ width: '200px' }}>Post</th>
-                    <th style={{ width: '300px' }}>Reason</th>
+                    <th style={{ width: '180px' }}>Post</th>
+                    <th style={{ width: '180px' }}>Reason</th>
                     <th>Description</th>
-                    <th style={{ width: '350px', textAlign: 'right' }}>Action</th>
+                    <th>Date</th>
+                    <th style={{ width: '250px', textAlign: 'right' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={4} className="text-center py-4">
+                      <td colSpan={5} className="text-center py-4">
                         Loading...
                       </td>
                     </tr>
                   ) : filteredReports.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="text-center py-4">
+                      <td colSpan={5} className="text-center py-4">
                         No post reports found.
                       </td>
                     </tr>
@@ -228,9 +289,23 @@ export default function ReportPage() {
                       <tr key={rep.id}>
                         <td>
                           <strong>Post #{rep.post_id || rep.id}</strong>
+                          {rep.user && (
+                            <div className="small text-muted">
+                              by {rep.user.fullname || rep.user.identity}
+                            </div>
+                          )}
                         </td>
-                        <td><span className="badge badge-warning text-dark">{rep.reason || 'Report'}</span></td>
+                        <td>
+                          <span className="badge badge-warning text-dark font-weight-600">
+                            {rep.reason || 'Report'}
+                          </span>
+                        </td>
                         <td>{rep.description || 'No description provided'}</td>
+                        <td className="small text-muted">
+                          {rep.created_at
+                            ? new Date(rep.created_at).toLocaleDateString()
+                            : 'N/A'}
+                        </td>
                         <td style={{ textAlign: 'right' }}>
                           <button
                             onClick={() => handleDismiss(rep.id)}

@@ -114,6 +114,7 @@ export default function AdminLayout({
     { label: 'Live Applications', path: '/liveapplication', altPath: '/viewLiveApplication', icon: 'fa-rss' },
     { label: 'Live History', path: '/livehistory', icon: 'fa-life-ring' },
     { label: 'Redeem Requests', path: '/redeemrequests', icon: 'fa-university' },
+    { label: 'Subscriptions', path: '/package', icon: 'fa-cube' },
     { label: 'Diamond Packs', path: '/diamondpacks', icon: 'fa-box' },
     { label: 'Gifts', path: '/gifts', icon: 'fa-gift' },
     { label: 'Verification', path: '/verificationrequests', icon: 'fa-check-circle' },
