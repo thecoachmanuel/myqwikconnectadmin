@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import CountryStateCitySelect from '@/components/CountryStateCitySelect';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getImageUrl } from '@/lib/image-helper';
 
@@ -313,30 +314,16 @@ function ViewUserContent() {
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group col-md-4">
-                    <label>Country</label>
-                    <input
-                      className="form-control"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group col-md-4">
-                    <label>State</label>
-                    <input
-                      className="form-control"
-                      value={state}
-                      onChange={(e) => setState(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group col-md-4">
-                    <label>City</label>
-                    <input
-                      className="form-control"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                    />
-                  </div>
+                  <CountryStateCitySelect
+                    country={country}
+                    setCountry={setCountry}
+                    state={state}
+                    setState={setState}
+                    city={city}
+                    setCity={setCity}
+                    colSize="col-md-4 col-sm-12"
+                    required={false}
+                  />
                 </div>
 
                 <div className="form-group">

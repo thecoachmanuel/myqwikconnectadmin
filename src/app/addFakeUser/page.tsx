@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import CountryStateCitySelect from '@/components/CountryStateCitySelect';
 import { useRouter } from 'next/navigation';
 
 export default function AddFakeUserPage() {
@@ -132,39 +133,16 @@ export default function AddFakeUserPage() {
                   required
                 />
               </div>
-              <div className="form-group col-md-3 col-sm-12">
-                <label>Country</label>
-                <input
-                  id="country"
-                  className="form-control"
-                  name="country"
-                  value={country}
-                  onChange={(e) => setCountry(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group col-md-3 col-sm-12">
-                <label>State</label>
-                <input
-                  id="state"
-                  className="form-control"
-                  name="state"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group col-md-3 col-sm-12">
-                <label>City</label>
-                <input
-                  id="city"
-                  className="form-control"
-                  name="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  required
-                />
-              </div>
+              <CountryStateCitySelect
+                country={country}
+                setCountry={setCountry}
+                state={state}
+                setState={setState}
+                city={city}
+                setCity={setCity}
+                colSize="col-md-3 col-sm-12"
+                required={true}
+              />
             </div>
 
             <div className="form-row mt-3">

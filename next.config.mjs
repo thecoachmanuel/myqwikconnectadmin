@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./src/data/geo/**/*', './public/data/geo/**/*'],
+  },
   async headers() {
     return [
       {
