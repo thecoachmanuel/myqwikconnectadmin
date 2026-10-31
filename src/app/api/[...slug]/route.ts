@@ -283,18 +283,28 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 7. getExplorePageProfileList / getRandomProfile / filteredProfiles / fetchUsersByCordinates
-  if (
-    endpoint === 'getExplorePageProfileList' ||
-    endpoint === 'getRandomProfile' ||
-    endpoint === 'filteredProfiles' ||
-    endpoint === 'fetchUsersByCordinates'
-  ) {
+  // 7. getExplorePageProfileList / getRandomProfile
+  if (endpoint === 'getExplorePageProfileList' || endpoint === 'getRandomProfile') {
     const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
     const currentUser = db.users.find((u) => u.id === currentUserId);
     const appdata = db.appdata[0];
 
-    let list = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0);
+    const blockedIds = (currentUser?.blocked_users || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+    const hiddenIds = (currentUser?.hidden_user_ids || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    let list = db.users.filter(
+      (u) =>
+        u.id !== currentUserId &&
+        u.is_block === 0 &&
+        !blockedIds.includes(u.id) &&
+        !hiddenIds.includes(u.id)
+    );
 
     // Admin Feature Control: Include Fake User In Matching
     if (appdata && appdata.include_fake_user_in_matching === 0) {
@@ -309,7 +319,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
     }
 
-    // Attach images
     const result = list.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
       if (userImgs.length === 0) {
@@ -331,11 +340,92 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 8. yourMatchings / fetchLikedProfiles / fetchSavedProfiles
-  if (endpoint === 'yourMatchings' || endpoint === 'fetchLikedProfiles' || endpoint === 'fetchSavedProfiles') {
-    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
-    const otherUsers = db.users
-      .filter((u) => u.id !== currentUserId && u.is_block === 0)
+  // 7b. filteredProfiles (Tinder search with granular criteria)
+  if (endpoint === 'filteredProfiles') {
+    const currentUserId = parseInt(fields.my_user_id || fields.user_id) || 0;
+    const appdata = db.appdata[0];
+    const start = parseInt(fields.start) || 0;
+    const limit = parseInt(fields.limit) || 20;
+
+    let list = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0);
+
+    if (appdata && appdata.include_fake_user_in_matching === 0) {
+      list = list.filter((u) => !u.is_fake);
+    }
+
+    // Gender filter
+    if (fields.gender !== undefined) {
+      const g = parseInt(fields.gender);
+      if (g === 1 || g === 2) {
+        list = list.filter((u) => u.gender === g);
+      }
+    }
+
+    // Relationship goal
+    if (fields.relationship_goal_id !== undefined && fields.relationship_goal_id !== '') {
+      const goalId = parseInt(fields.relationship_goal_id);
+      if (goalId > 0) {
+        list = list.filter((u) => u.relationship_goal_id === goalId);
+      }
+    }
+
+    // Religion
+    if (fields.religion_key !== undefined && fields.religion_key !== '') {
+      const relKey = fields.religion_key.toString().toLowerCase().trim();
+      const filtered = list.filter((u) => (u.religion_key || '').toString().toLowerCase().trim() === relKey);
+      if (filtered.length > 0) list = filtered;
+    }
+
+    // Languages
+    if (fields.language_keys !== undefined && fields.language_keys !== '') {
+      const langList = fields.language_keys.toString().split(',').map((s: string) => s.trim().toLowerCase());
+      const filtered = list.filter((u) => {
+        const uLangs = (u.language_keys || '').toString().split(',').map((s) => s.trim().toLowerCase());
+        return langList.some((l: string) => uLangs.includes(l));
+      });
+      if (filtered.length > 0) list = filtered;
+    }
+
+    // Interests
+    if (fields.interests !== undefined && fields.interests !== '') {
+      const interestList = fields.interests.toString().split(',').map((s: string) => s.trim());
+      const filtered = list.filter((u) => {
+        const uInterests = (u.interests || '').split(',').map((s) => s.trim());
+        return interestList.some((i: string) => uInterests.includes(i));
+      });
+      if (filtered.length > 0) list = filtered;
+    }
+
+    if (list.length === 0) {
+      list = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0);
+    }
+
+    const paged = list.slice(start, start + limit);
+    const result = paged.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return {
+        ...u,
+        images: userImgs,
+        is_like: (db.liked_profiles || []).some(
+          (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
+        ),
+      };
+    });
+
+    return jsonResponse({
+      status: true,
+      message: 'Matched Profile : ' + result.length,
+      data: result,
+    });
+  }
+
+  // 7c. fetchUsersByCordinates (Explore on Map)
+  if (endpoint === 'fetchUsersByCordinates') {
+    const list = db.users
+      .filter((u) => u.is_block === 0 && u.show_on_map !== 0)
       .map((u) => {
         let userImgs = db.images.filter((img) => img.user_id === u.id);
         if (userImgs.length === 0) {
@@ -350,17 +440,225 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
-      data: otherUsers,
+      data: list,
     });
   }
 
-  // 9. likedProfile / dislikedProfile / updateSavedProfile
-  if (endpoint === 'likedProfile' || endpoint === 'dislikedProfile' || endpoint === 'updateSavedProfile') {
+  // 8. yourMatchings / fetchLikedProfiles
+  if (endpoint === 'yourMatchings' || endpoint === 'fetchLikedProfiles') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const likedIds = (currentUser?.likedprofile || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const fromLikedProfiles = (db.liked_profiles || [])
+      .filter((lp) => lp.my_user_id === currentUserId)
+      .map((lp) => lp.user_id);
+
+    const allLikedIds = Array.from(new Set([...likedIds, ...fromLikedProfiles]));
+    let likedList = db.users.filter((u) => allLikedIds.includes(u.id));
+    if (likedList.length === 0) {
+      likedList = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0).slice(0, 5);
+    }
+
+    const data = likedList.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return { ...u, images: userImgs, is_like: 1 };
+    });
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data,
+    });
+  }
+
+  // 8b. fetchSavedProfiles
+  if (endpoint === 'fetchSavedProfiles') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const savedIds = (currentUser?.savedprofile || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    let savedList = db.users.filter((u) => savedIds.includes(u.id));
+    if (savedList.length === 0) {
+      savedList = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0).slice(0, 5);
+    }
+
+    const data = savedList.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return { ...u, images: userImgs };
+    });
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data,
+    });
+  }
+
+  // 8c. fetchBlockedProfiles
+  if (endpoint === 'fetchBlockedProfiles') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const blockedIds = (currentUser?.blocked_users || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const blockedList = db.users.filter((u) => blockedIds.includes(u.id));
+    const data = blockedList.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return { ...u, images: userImgs };
+    });
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data,
+    });
+  }
+
+  // 8d. fetchMyHiddenProfiles
+  if (endpoint === 'fetchMyHiddenProfiles') {
+    const currentUserId = parseInt(fields.my_user_id || fields.user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const hiddenIds = (currentUser?.hidden_user_ids || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const start = parseInt(fields.start) || 0;
+    const limit = parseInt(fields.limit) || 20;
+
+    const hiddenList = db.users.filter((u) => hiddenIds.includes(u.id)).slice(start, start + limit);
+    const data = hiddenList.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return { ...u, images: userImgs };
+    });
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data,
+    });
+  }
+
+  // 9. updateSavedProfile
+  if (endpoint === 'updateSavedProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+    if (user) {
+      if (fields.profiles !== undefined) {
+        user.savedprofile = fields.profiles.toString();
+      }
+      user.updated_at = new Date().toISOString();
+      user.images = db.images.filter((img) => img.user_id === user.id);
+      if (user.images.length === 0) {
+        user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+      }
+      await commitDb(db);
+      return jsonResponse({
+        status: true,
+        message: 'Saved profile updated successfully',
+        data: user,
+      });
+    }
+    return jsonResponse({ status: false, message: 'User not found' });
+  }
+
+  // 9b. updateUserBlockList
+  if (endpoint === 'updateUserBlockList') {
+    const userId = parseInt(fields.user_id);
+    const user = db.users.find((u) => u.id === userId);
+    if (user) {
+      if (fields.blocked_users !== undefined) {
+        user.blocked_users = fields.blocked_users.toString();
+      }
+      user.updated_at = new Date().toISOString();
+      user.images = db.images.filter((img) => img.user_id === user.id);
+      if (user.images.length === 0) {
+        user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+      }
+      await commitDb(db);
+      return jsonResponse({
+        status: true,
+        message: 'Block list updated successfully',
+        data: user,
+      });
+    }
+    return jsonResponse({ status: false, message: 'User not found' });
+  }
+
+  // 9c. updateLikedProfile
+  if (endpoint === 'updateLikedProfile') {
+    const myUserId = parseInt(fields.my_user_id || fields.user_id);
+    const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
+    const user = db.users.find((u) => u.id === myUserId);
+
+    let isLike = false;
+    const existingIndex = (db.liked_profiles || []).findIndex(
+      (lp) => lp.my_user_id === myUserId && lp.user_id === targetUserId
+    );
+
+    if (existingIndex >= 0) {
+      db.liked_profiles.splice(existingIndex, 1);
+      isLike = false;
+      if (user && user.likedprofile) {
+        user.likedprofile = user.likedprofile
+          .split(',')
+          .filter((id) => id.trim() !== targetUserId.toString())
+          .join(',');
+      }
+    } else {
+      db.liked_profiles.push({
+        id: getNextId(db.liked_profiles),
+        my_user_id: myUserId,
+        user_id: targetUserId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      isLike = true;
+      if (user) {
+        const ids = (user.likedprofile || '').split(',').filter(Boolean);
+        if (!ids.includes(targetUserId.toString())) {
+          ids.push(targetUserId.toString());
+          user.likedprofile = ids.join(',');
+        }
+      }
+    }
+
+    await commitDb(db);
+    return jsonResponse({
+      status: true,
+      message: isLike ? 'Profile liked successfully' : 'Profile unliked successfully',
+      data: { is_like: isLike },
+    });
+  }
+
+  // 9d. likedProfile
+  if (endpoint === 'likedProfile') {
     const myUserId = parseInt(fields.my_user_id || fields.user_id);
     const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
 
-    if (endpoint === 'likedProfile' && myUserId && targetUserId) {
-      const exists = db.liked_profiles.find(
+    if (myUserId && targetUserId) {
+      const exists = (db.liked_profiles || []).find(
         (lp) => lp.my_user_id === myUserId && lp.user_id === targetUserId
       );
       if (!exists) {
@@ -371,8 +669,49 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
-        commitDb(db);
       }
+      const myUser = db.users.find((u) => u.id === myUserId);
+      if (myUser) {
+        const ids = (myUser.likedprofile || '').split(',').filter(Boolean);
+        if (!ids.includes(targetUserId.toString())) {
+          ids.push(targetUserId.toString());
+          myUser.likedprofile = ids.join(',');
+        }
+      }
+      await commitDb(db);
+    }
+
+    const isMatch = (db.liked_profiles || []).some(
+      (lp) => lp.my_user_id === targetUserId && lp.user_id === myUserId
+    );
+
+    return jsonResponse({
+      status: true,
+      message: 'Action successful',
+      data: { is_match: isMatch },
+    });
+  }
+
+  // 9e. dislikedProfile
+  if (endpoint === 'dislikedProfile') {
+    const myUserId = parseInt(fields.my_user_id || fields.user_id);
+    const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
+
+    if (myUserId && targetUserId) {
+      const idx = (db.liked_profiles || []).findIndex(
+        (lp) => lp.my_user_id === myUserId && lp.user_id === targetUserId
+      );
+      if (idx >= 0) {
+        db.liked_profiles.splice(idx, 1);
+      }
+      const myUser = db.users.find((u) => u.id === myUserId);
+      if (myUser && myUser.likedprofile) {
+        myUser.likedprofile = myUser.likedprofile
+          .split(',')
+          .filter((id) => id.trim() !== targetUserId.toString())
+          .join(',');
+      }
+      await commitDb(db);
     }
 
     return jsonResponse({
@@ -380,6 +719,24 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       message: 'Action successful',
       data: { is_match: false },
     });
+  }
+
+  // 9f. deleteMyAccount
+  if (endpoint === 'deleteMyAccount') {
+    const userId = parseInt(fields.user_id);
+    const index = db.users.findIndex((u) => u.id === userId);
+    if (index >= 0) {
+      db.users.splice(index, 1);
+      db.images = db.images.filter((i) => i.user_id !== userId);
+      db.posts = db.posts.filter((p) => p.user_id !== userId);
+      db.stories = db.stories.filter((s) => s.user_id !== userId);
+      await commitDb(db);
+      return jsonResponse({
+        status: true,
+        message: 'Account deleted successfully',
+      });
+    }
+    return jsonResponse({ status: false, message: 'User not found' });
   }
 
   // 10. getInterests
@@ -420,10 +777,13 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         user.wallet = (user.wallet || 0) + coins;
         user.total_collected = (user.total_collected || 0) + coins;
       } else {
-        user.wallet = Math.max(0, (user.wallet || 0) - coins);
+        // Fake users won't be charged for messages, reverse swipe, or live stream watch
+        if (!user.is_fake) {
+          user.wallet = Math.max(0, (user.wallet || 0) - coins);
+        }
       }
       user.updated_at = new Date().toISOString();
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({
         status: true,
         message: 'Coins updated successfully',
@@ -999,10 +1359,66 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const content = db.post_contents.find((c) => c.post_id === postId);
     if (content) {
       content.view_count = (content.view_count || 0) + 1;
-      commitDb(db);
+      await commitDb(db);
       return jsonResponse({ status: true, message: 'Add post view count', data: content });
     }
     return jsonResponse({ status: true, message: 'Add post view count' });
+  }
+
+  // 28b. reportPost
+  if (endpoint === 'reportPost') {
+    const postId = parseInt(fields.post_id);
+    const reason = fields.reason || 'Inappropriate content';
+    const description = fields.description || '';
+    const newReport: Report = {
+      id: getNextId(db.reports),
+      type: 2,
+      user_id: parseInt(fields.user_id) || 1,
+      post_id: postId,
+      reason,
+      description,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    db.reports.push(newReport);
+    await commitDb(db);
+    return jsonResponse({
+      status: true,
+      message: 'Post reported successfully',
+    });
+  }
+
+  // 28c. fetchPostsByHashtag
+  if (endpoint === 'fetchPostsByHashtag') {
+    const hashtag = (fields.hashtag || '').toString().toLowerCase().replace('#', '').trim();
+    const start = parseInt(fields.start) || 0;
+    const limit = parseInt(fields.limit) || 20;
+
+    const matchedPosts = db.posts
+      .filter((p) => {
+        const postTags = (p.hashtags || '').toLowerCase();
+        return postTags.includes(hashtag);
+      })
+      .slice(start, start + limit)
+      .map((p) => {
+        const postUser = db.users.find((u) => u.id === p.user_id);
+        let userImages = postUser ? db.images.filter((i) => i.user_id === postUser.id) : [];
+        if (userImages.length === 0) {
+          userImages = [{ id: (postUser?.id || 1) * 10, user_id: postUser?.id || 1, image: 'uploads/user1.jpg' }];
+        }
+        return {
+          ...p,
+          is_like: p.is_like || 0,
+          user: postUser ? { ...postUser, images: userImages } : null,
+          content: db.post_contents.filter((c) => c.post_id === p.id),
+        };
+      });
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: matchedPosts,
+    });
   }
 
   // 29. Stories: createStory, viewStory, deleteStory, fetchMyStories
