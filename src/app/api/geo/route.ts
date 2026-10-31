@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { Country, State, City } from 'country-state-city';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,80 +20,70 @@ interface StateItem {
 
 // In-memory cache for fast lookups
 let cachedCountries: CountryItem[] | null = null;
-let cachedStatesByCountry: Record<string, StateItem[]> | null = null;
-let cachedCitiesByState: Record<string, string[]> | null = null;
 let countryNameToCodeMap: Map<string, string> | null = null;
-let stateNameToCodeMap: Map<string, string> | null = null;
 
-function loadGeoData() {
-  if (cachedCountries && cachedStatesByCountry && cachedCitiesByState) {
+function initGeoLookups() {
+  if (cachedCountries && countryNameToCodeMap) {
     return;
   }
 
   try {
-    const candidates = [
-      path.join(process.cwd(), 'src/data/geo'),
-      path.join(process.cwd(), 'public/data/geo'),
-      path.join(__dirname, '../../../../src/data/geo'),
-    ];
-
-    let baseDir = '';
-    for (const dir of candidates) {
-      if (fs.existsSync(path.join(dir, 'countries.json'))) {
-        baseDir = dir;
-        break;
-      }
-    }
-
-    if (!baseDir) {
-      console.warn('Geo data directory not found in candidates, fallback to empty');
-      cachedCountries = [];
-      cachedStatesByCountry = {};
-      cachedCitiesByState = {};
-      return;
-    }
-
-    const cRaw = fs.readFileSync(path.join(baseDir, 'countries.json'), 'utf-8');
-    const sRaw = fs.readFileSync(path.join(baseDir, 'states.json'), 'utf-8');
-    const ciRaw = fs.readFileSync(path.join(baseDir, 'cities.json'), 'utf-8');
-
-    cachedCountries = JSON.parse(cRaw);
-    cachedStatesByCountry = JSON.parse(sRaw);
-    cachedCitiesByState = JSON.parse(ciRaw);
+    const all = Country.getAllCountries();
+    cachedCountries = all.map((c) => ({
+      code: c.isoCode,
+      name: c.name,
+      phone: c.phonecode ? (c.phonecode.startsWith('+') ? c.phonecode : `+${c.phonecode}`) : '',
+    }));
 
     countryNameToCodeMap = new Map();
-    if (cachedCountries) {
-      for (const c of cachedCountries) {
-        countryNameToCodeMap.set(c.name.toLowerCase().trim(), c.code.toUpperCase().trim());
-      }
-    }
-
-    stateNameToCodeMap = new Map();
-    if (cachedStatesByCountry) {
-      for (const cCode in cachedStatesByCountry) {
-        for (const s of cachedStatesByCountry[cCode]) {
-          stateNameToCodeMap.set(`${cCode}:${s.name.toLowerCase().trim()}`, s.stateCode);
-          if (!stateNameToCodeMap.has(s.name.toLowerCase().trim())) {
-            stateNameToCodeMap.set(s.name.toLowerCase().trim(), s.stateCode);
-          }
-        }
-      }
+    for (const c of all) {
+      countryNameToCodeMap.set(c.name.toLowerCase().trim(), c.isoCode.toUpperCase().trim());
+      countryNameToCodeMap.set(c.isoCode.toLowerCase().trim(), c.isoCode.toUpperCase().trim());
     }
   } catch (err) {
-    console.error('Error loading geo data:', err);
-    cachedCountries = cachedCountries || [];
-    cachedStatesByCountry = cachedStatesByCountry || {};
-    cachedCitiesByState = cachedCitiesByState || {};
+    console.error('Error initializing country-state-city geo lookups:', err);
+    cachedCountries = [];
+    countryNameToCodeMap = new Map();
   }
 }
 
+function resolveCountryCode(countryParam: string): string {
+  if (!countryParam) return '';
+  const trimmed = countryParam.trim();
+  if (trimmed.length === 2) return trimmed.toUpperCase();
+  initGeoLookups();
+  return countryNameToCodeMap?.get(trimmed.toLowerCase()) || trimmed.toUpperCase();
+}
+
+function resolveStateCode(countryCode: string, stateParam: string): string {
+  if (!stateParam) return '';
+  const trimmed = stateParam.trim();
+  if (!countryCode) return trimmed;
+
+  const states = State.getStatesOfCountry(countryCode);
+  const found = states.find(
+    (s) =>
+      s.isoCode.toLowerCase() === trimmed.toLowerCase() ||
+      s.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  return found ? found.isoCode : trimmed;
+}
+
 export async function GET(req: NextRequest) {
-  loadGeoData();
+  initGeoLookups();
 
   const { searchParams } = new URL(req.url);
   const action = (searchParams.get('action') || searchParams.get('type') || 'countries').toLowerCase();
-  const countryParam = searchParams.get('country') || searchParams.get('countryName') || searchParams.get('countryCode') || '';
-  const stateParam = searchParams.get('state') || searchParams.get('stateName') || searchParams.get('stateCode') || '';
+  const countryParam =
+    searchParams.get('country') ||
+    searchParams.get('countryName') ||
+    searchParams.get('countryCode') ||
+    '';
+  const stateParam =
+    searchParams.get('state') ||
+    searchParams.get('stateName') ||
+    searchParams.get('stateCode') ||
+    '';
 
   if (action === 'countries') {
     return NextResponse.json({
@@ -103,111 +94,131 @@ export async function GET(req: NextRequest) {
   }
 
   if (action === 'states') {
-    let code = countryParam.trim().toUpperCase();
-    if (countryNameToCodeMap && countryNameToCodeMap.has(countryParam.trim().toLowerCase())) {
-      code = countryNameToCodeMap.get(countryParam.trim().toLowerCase())!;
-    }
+    const cCode = resolveCountryCode(countryParam);
+    const states = cCode
+      ? State.getStatesOfCountry(cCode).map((s) => ({
+          name: s.name,
+          stateCode: s.isoCode,
+          countryCode: cCode,
+        }))
+      : [];
 
-    const states = cachedStatesByCountry?.[code] || [];
     return NextResponse.json({
       status: true,
-      countryCode: code,
+      countryCode: cCode,
       message: 'States fetched successfully',
       data: states,
     });
   }
 
   if (action === 'cities') {
-    let cCode = countryParam.trim().toUpperCase();
-    if (countryNameToCodeMap && countryNameToCodeMap.has(countryParam.trim().toLowerCase())) {
-      cCode = countryNameToCodeMap.get(countryParam.trim().toLowerCase())!;
+    const cCode = resolveCountryCode(countryParam);
+    const sCode = resolveStateCode(cCode, stateParam);
+
+    let cityList: string[] = [];
+    if (cCode && sCode) {
+      // Exact match for country AND state
+      cityList = City.getCitiesOfState(cCode, sCode).map((c) => c.name);
     }
 
-    let sCode = stateParam.trim();
-    if (stateNameToCodeMap) {
-      const combinedKey = `${cCode}:${stateParam.trim().toLowerCase()}`;
-      if (stateNameToCodeMap.has(combinedKey)) {
-        sCode = stateNameToCodeMap.get(combinedKey)!;
-      } else if (stateNameToCodeMap.has(stateParam.trim().toLowerCase())) {
-        sCode = stateNameToCodeMap.get(stateParam.trim().toLowerCase())!;
-      }
+    // Fallback to all cities of country if state yielded none
+    if (cityList.length === 0 && cCode) {
+      cityList = City.getCitiesOfCountry(cCode).map((c) => c.name);
     }
 
-    const cities = cachedCitiesByState?.[sCode] || [];
     return NextResponse.json({
       status: true,
+      countryCode: cCode,
       stateCode: sCode,
       message: 'Cities fetched successfully',
-      data: cities,
+      data: cityList,
     });
   }
 
-  return NextResponse.json({
-    status: false,
-    message: 'Invalid action parameter',
-    validActions: ['countries', 'states', 'cities'],
-  }, { status: 400 });
+  return NextResponse.json(
+    {
+      status: false,
+      message: 'Invalid action parameter',
+      validActions: ['countries', 'states', 'cities'],
+    },
+    { status: 400 }
+  );
 }
 
 export async function POST(req: NextRequest) {
-  loadGeoData();
+  initGeoLookups();
 
   try {
     const body = await req.json().catch(() => ({}));
-    const action = (body.action || body.type || (body.state ? 'cities' : body.country ? 'states' : 'countries')).toLowerCase();
+    const action = (
+      body.action ||
+      body.type ||
+      (body.state ? 'cities' : body.country ? 'states' : 'countries')
+    ).toLowerCase();
     const countryParam = body.country || body.countryName || body.countryCode || '';
     const stateParam = body.state || body.stateName || body.stateCode || '';
 
-    if (action === 'states') {
-      let code = countryParam.trim().toUpperCase();
-      if (countryNameToCodeMap && countryNameToCodeMap.has(countryParam.trim().toLowerCase())) {
-        code = countryNameToCodeMap.get(countryParam.trim().toLowerCase())!;
-      }
-
-      const states = cachedStatesByCountry?.[code] || [];
+    if (action === 'countries') {
       return NextResponse.json({
         status: true,
-        countryCode: code,
+        message: 'Countries fetched successfully',
+        data: cachedCountries || [],
+      });
+    }
+
+    if (action === 'states') {
+      const cCode = resolveCountryCode(countryParam);
+      const states = cCode
+        ? State.getStatesOfCountry(cCode).map((s) => ({
+            name: s.name,
+            stateCode: s.isoCode,
+            countryCode: cCode,
+          }))
+        : [];
+
+      return NextResponse.json({
+        status: true,
+        countryCode: cCode,
         message: 'States fetched successfully',
         data: states,
       });
     }
 
     if (action === 'cities') {
-      let cCode = countryParam.trim().toUpperCase();
-      if (countryNameToCodeMap && countryNameToCodeMap.has(countryParam.trim().toLowerCase())) {
-        cCode = countryNameToCodeMap.get(countryParam.trim().toLowerCase())!;
+      const cCode = resolveCountryCode(countryParam);
+      const sCode = resolveStateCode(cCode, stateParam);
+
+      let cityList: string[] = [];
+      if (cCode && sCode) {
+        cityList = City.getCitiesOfState(cCode, sCode).map((c) => c.name);
+      }
+      if (cityList.length === 0 && cCode) {
+        cityList = City.getCitiesOfCountry(cCode).map((c) => c.name);
       }
 
-      let sCode = stateParam.trim();
-      if (stateNameToCodeMap) {
-        const combinedKey = `${cCode}:${stateParam.trim().toLowerCase()}`;
-        if (stateNameToCodeMap.has(combinedKey)) {
-          sCode = stateNameToCodeMap.get(combinedKey)!;
-        } else if (stateNameToCodeMap.has(stateParam.trim().toLowerCase())) {
-          sCode = stateNameToCodeMap.get(stateParam.trim().toLowerCase())!;
-        }
-      }
-
-      const cities = cachedCitiesByState?.[sCode] || [];
       return NextResponse.json({
         status: true,
+        countryCode: cCode,
         stateCode: sCode,
         message: 'Cities fetched successfully',
-        data: cities,
+        data: cityList,
       });
     }
 
-    return NextResponse.json({
-      status: true,
-      message: 'Countries fetched successfully',
-      data: cachedCountries || [],
-    });
+    return NextResponse.json(
+      {
+        status: false,
+        message: 'Invalid action parameter',
+      },
+      { status: 400 }
+    );
   } catch (err: any) {
-    return NextResponse.json({
-      status: false,
-      message: err.message || 'Error processing request',
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        status: false,
+        message: err.message || 'Internal server error',
+      },
+      { status: 500 }
+    );
   }
 }
-

@@ -448,8 +448,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     list = list.filter((u) => u.anonymous !== 1);
 
     // Apply gender preference if exists (1 = Male, 2 = Female, 3 = Both)
-    if (currentUser?.gender_preferred && currentUser.gender_preferred !== 3) {
-      const filtered = list.filter((u) => u.gender === currentUser.gender_preferred);
+    if (currentUser?.gender_preferred && Number(currentUser.gender_preferred) !== 3) {
+      const preferred = Number(currentUser.gender_preferred);
+      const filtered = list.filter((u) => Number(u.gender) === preferred);
       if (filtered.length > 0) {
         list = filtered;
       }
@@ -457,8 +458,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     // Apply age preference if set
     if (currentUser?.age_preferred_min && currentUser?.age_preferred_max) {
-      const minAge = currentUser.age_preferred_min;
-      const maxAge = currentUser.age_preferred_max;
+      const minAge = Number(currentUser.age_preferred_min);
+      const maxAge = Number(currentUser.age_preferred_max);
       const ageFiltered = list.filter((u) => {
         let age = parseInt(String(u.age || '0'));
         if (!age && u.dob) {
@@ -473,7 +474,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
     }
 
-    // Apply distance preference if coordinates available
+    // Apply distance preference if coordinates available (fallback to all if < 3 nearby)
     if (currentUser?.distance_preference && currentUser.distance_preference > 0) {
       const userLat = parseFloat(currentUser.lattitude || currentUser.latitude || '0');
       const userLon = parseFloat(currentUser.longitude || '0');
@@ -484,7 +485,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           if (isNaN(uLat) || isNaN(uLon) || (uLat === 0 && uLon === 0)) return true;
           return getDistanceKm(userLat, userLon, uLat, uLon) <= currentUser.distance_preference!;
         });
-        if (distFiltered.length > 0) {
+        if (distFiltered.length >= 3) {
           list = distFiltered;
         }
       }
@@ -569,11 +570,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       });
     }
 
-    // Relationship goal
+    // Relationship goal (supports single ID or comma-separated multiple IDs)
     if (fields.relationship_goal_id !== undefined && fields.relationship_goal_id !== '') {
-      const goalId = parseInt(fields.relationship_goal_id);
-      if (goalId > 0) {
-        list = list.filter((u) => Number(u.relationship_goal_id) === goalId);
+      const queryGoalIds = fields.relationship_goal_id
+        .toString()
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0);
+      if (queryGoalIds.length > 0) {
+        list = list.filter((u) => {
+          const uGoalIds = (u.relationship_goal_id ?? '')
+            .toString()
+            .split(',')
+            .map((s: string) => s.trim())
+            .filter((s: string) => s.length > 0);
+          return queryGoalIds.some((g: string) => uGoalIds.includes(g));
+        });
       }
     }
 

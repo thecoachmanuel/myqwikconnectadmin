@@ -85,8 +85,8 @@ export interface User {
   age_preferred_min: number;
   age_preferred_max: number;
   distance_preference: number;
-  relationship_goal_id: number;
-  religion_key: number;
+  relationship_goal_id: number | string;
+  religion_key: number | string;
   language_keys: string;
   dob: string;
   age?: number;

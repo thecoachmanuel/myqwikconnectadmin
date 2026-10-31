@@ -186,19 +186,21 @@ export default function CountryStateCitySelect({
       return;
     }
 
+    const code = currentCountryCode || country;
     const sCode = currentStateCode || state;
-    if (cachedClientCities.has(sCode)) {
-      setCities(cachedClientCities.get(sCode)!);
+    const cacheKey = `${code}:${sCode}`;
+    if (cachedClientCities.has(cacheKey)) {
+      setCities(cachedClientCities.get(cacheKey)!);
       return;
     }
 
     setLoadingCities(true);
-    fetch(`/api/geo?action=cities&state=${encodeURIComponent(state)}&stateCode=${encodeURIComponent(sCode)}&country=${encodeURIComponent(country)}`)
+    fetch(`/api/geo?action=cities&country=${encodeURIComponent(country)}&countryCode=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}&stateCode=${encodeURIComponent(sCode)}`)
       .then((res) => res.json())
       .then((data) => {
         if (!active) return;
         const list: string[] = data.data || [];
-        cachedClientCities.set(sCode, list);
+        cachedClientCities.set(cacheKey, list);
         setCities(list);
         setLoadingCities(false);
       })
