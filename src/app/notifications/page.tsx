@@ -15,6 +15,13 @@ export default function NotificationsPage() {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
 
+  // Edit Notification Modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editMessage, setEditMessage] = useState('');
+  const [updating, setUpdating] = useState(false);
+
   const fetchNotifs = () => {
     setLoading(true);
     fetch('/fetchAllNotification', { method: 'POST' })
@@ -60,6 +67,53 @@ export default function NotificationsPage() {
     setSending(false);
     setShowAddModal(false);
     fetchNotifs();
+  };
+
+  const handleRepeat = async (n: any) => {
+    if (confirm(`Repeat and send "${n.title}" to all users now?`)) {
+      try {
+        const res = await fetch('/repeatNotification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: n.id, title: n.title, message: n.message }),
+        });
+        const data = await res.json();
+        alert(data.message || 'Notification broadcast repeated successfully!');
+      } catch (err: any) {
+        alert('Failed to repeat notification: ' + err.message);
+      }
+    }
+  };
+
+  const handleOpenEdit = (n: any) => {
+    setEditId(n.id);
+    setEditTitle(n.title || '');
+    setEditMessage(n.message || '');
+    setShowEditModal(true);
+  };
+
+  const handleUpdateNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editId) return;
+    setUpdating(true);
+    try {
+      const res = await fetch('/updateNotification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editId, title: editTitle, message: editMessage }),
+      });
+      const data = await res.json();
+      if (data.status) {
+        setShowEditModal(false);
+        fetchNotifs();
+      } else {
+        alert(data.message || 'Failed to update notification');
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -132,8 +186,23 @@ export default function NotificationsPage() {
                       <td>{n.message}</td>
                       <td style={{ textAlign: 'right' }}>
                         <button
+                          className="btn btn-sm btn-info me-2 text-white"
+                          onClick={() => handleRepeat(n)}
+                          title="Repeat broadcast"
+                        >
+                          Repeat
+                        </button>
+                        <button
+                          className="btn btn-sm btn-success me-2 text-white"
+                          onClick={() => handleOpenEdit(n)}
+                          title="Edit notification"
+                        >
+                          Edit
+                        </button>
+                        <button
                           className="btn btn-sm btn-danger"
                           onClick={() => handleDelete(n.id)}
+                          title="Delete notification"
                         >
                           Delete
                         </button>
@@ -200,6 +269,72 @@ export default function NotificationsPage() {
                       value={sending ? 'Sending...' : 'Send'}
                       disabled={sending}
                     />
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Notification Modal */}
+      {showEditModal && (
+        <div
+          className="modal fade show d-block"
+          id="editNotificationModal"
+          tabIndex={-1}
+          role="dialog"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        >
+          <div className="modal-dialog modal-dialog-centered" role="document">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5>Edit Notification</h5>
+                <button
+                  type="button"
+                  className="close"
+                  onClick={() => setShowEditModal(false)}
+                  aria-label="Close"
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form onSubmit={handleUpdateNotification} autoComplete="off">
+                  <div className="form-group mb-3">
+                    <label>Title</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      required
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group mb-3">
+                    <label>Message</label>
+                    <textarea
+                      className="form-control"
+                      rows={4}
+                      required
+                      value={editMessage}
+                      onChange={(e) => setEditMessage(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group mb-0">
+                    <input
+                      className="btn btn-primary mr-1"
+                      type="submit"
+                      value={updating ? 'Saving...' : 'Update'}
+                      disabled={updating}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary ms-2"
+                      onClick={() => setShowEditModal(false)}
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </form>
               </div>

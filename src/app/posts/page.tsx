@@ -107,29 +107,41 @@ export default function PostsPage() {
                   </tr>
                 ) : (
                   filteredPosts.map((p) => {
-                    const firstContent =
-                      p.contents && p.contents[0]?.content
-                        ? p.contents[0].content
-                        : p.content && p.content[0]?.content
-                        ? p.content[0].content
-                        : '/asset/img/user.png';
-                    const contentSrc = getImageUrl(firstContent);
+                    const contentItem =
+                      (p.contents && p.contents[0]) ||
+                      (p.content && p.content[0]) ||
+                      null;
+                    const rawMedia = contentItem
+                      ? contentItem.thumbnail || contentItem.content
+                      : null;
+                    const hasMedia = !!rawMedia;
+                    const contentSrc = hasMedia ? getImageUrl(rawMedia) : null;
 
                     return (
                       <tr key={p.id}>
                         <td>
-                          <img
-                            src={contentSrc}
-                            alt=""
-                            width={60}
-                            height={60}
-                            className="rounded"
-                            style={{ objectFit: 'cover', cursor: 'pointer' }}
-                            onClick={() => setViewingPost(p)}
-                            onError={(e: any) => {
-                              e.currentTarget.src = '/asset/img/user.png';
-                            }}
-                          />
+                          {hasMedia && contentSrc ? (
+                            <img
+                              src={contentSrc}
+                              alt="Thumbnail"
+                              width={60}
+                              height={60}
+                              className="rounded"
+                              style={{ objectFit: 'cover', cursor: 'pointer' }}
+                              onClick={() => setViewingPost(p)}
+                              onError={(e: any) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <div
+                              className="rounded bg-light d-flex align-items-center justify-content-center text-muted border"
+                              style={{ width: '60px', height: '60px', fontSize: '11px', textAlign: 'center', cursor: 'pointer' }}
+                              onClick={() => setViewingPost(p)}
+                            >
+                              <i className="fa fa-align-left mr-1"></i>Text
+                            </div>
+                          )}
                         </td>
                         <td>{p.user?.username || 'N/A'}</td>
                         <td>{p.user?.fullname || 'N/A'}</td>

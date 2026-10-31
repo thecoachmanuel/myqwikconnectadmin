@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getDb, commitDb, getNextId } from '@/lib/db';
 import { corsHeaders, handleCors, jsonResponse, parseRequestBody } from '@/lib/api-helper';
 import { User, UserImage, Post, PostContent, Comment, Story, Report } from '@/models/types';
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 export async function OPTIONS() {
   return handleCors();
@@ -1102,14 +1103,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const userId = parseInt(fields.user_id);
     const user = db.users.find((u) => u.id === userId);
     const coinAmount = parseInt(fields.coin_amount) || (user?.wallet ?? 0);
-    let paymentGateway = fields.payment_gateway?.toString() || 'PayPal';
-    let accountDetails = fields.account_details?.toString() || '';
-
-    if (accountDetails.toLowerCase() === 'paypal' || accountDetails.toLowerCase().includes('bank')) {
-      const tmp = paymentGateway;
-      paymentGateway = accountDetails;
-      accountDetails = tmp;
-    }
+    const paymentGateway = fields.payment_gateway?.toString() || 'PayPal';
+    const accountDetails = fields.account_details?.toString() || '';
 
     const newReq: any = {
       id: getNextId(db.redeem_requests),
@@ -1133,7 +1128,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     return jsonResponse({
       status: true,
-      message: 'Redeem request submitted',
+      message: 'Redeem Request placed successfully!',
       data: newReq,
     });
   }
@@ -1267,6 +1262,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const csvSaved = (currentUser?.savedprofile || '').split(',').map((s) => s.trim());
 
     let list = db.users.filter((u) => u.is_block === 0);
+    // Exclude current searching user so they don't see themselves in search
+    if (currentUserId) {
+      list = list.filter((u) => u.id !== currentUserId);
+    }
+    // Exclude anonymous users
+    list = list.filter((u) => u.anonymous !== 1);
 
     if (keyword) {
       list = list.filter(
@@ -1425,10 +1426,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         is_like: p.is_like || 0,
         user: postUser
           ? {
-              ...postUser,
-              images: userImages,
-              stories: (db.stories || []).filter((s) => s.user_id === postUser.id),
-            }
+            ...postUser,
+            images: userImages,
+            stories: (db.stories || []).filter((s) => s.user_id === postUser.id),
+          }
           : null,
         content: db.post_contents.filter((c) => c.post_id === p.id),
       };
@@ -1468,9 +1469,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         ...p,
         user: postUser
           ? {
-              ...postUser,
-              images: userImages,
-            }
+            ...postUser,
+            images: userImages,
+          }
           : null,
         content: db.post_contents.filter((c) => c.post_id === p.id),
       };
@@ -1824,7 +1825,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
     return jsonResponse({ status: true, message: 'Notification sent' });
   }
 
@@ -1877,6 +1878,37 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 32. generateAgoraToken
   if (endpoint === 'generateAgoraToken') {
     const channelName = fields.channelName || 'orange_live';
+    const uid = fields.uid ? parseInt(fields.uid) : 0;
+    const appId = process.env.AGORA_APP_ID || '';
+    const appCertificate = process.env.AGORA_APP_CERT || process.env.AGORA_APP_CERTIFICATE || '';
+
+    if (appId && appCertificate) {
+      try {
+        const role = RtcRole.PUBLISHER;
+        const expirationTimeInSeconds = 7200;
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+        const token = RtcTokenBuilder.buildTokenWithUid(
+          appId,
+          appCertificate,
+          channelName,
+          uid,
+          role,
+          privilegeExpiredTs,
+          privilegeExpiredTs
+        );
+
+        return jsonResponse({
+          status: true,
+          message: 'generated successfully',
+          token,
+        });
+      } catch (err: any) {
+        console.error('Agora token build error:', err);
+      }
+    }
+
     const mockToken = `AGORA_TOKEN_${channelName}_${Date.now()}`;
     return jsonResponse({
       status: true,
@@ -1938,6 +1970,199 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       return jsonResponse({ status: true, message: 'Terms of use updated' });
     }
     return jsonResponse({ status: false, message: 'Pages not found' });
+  }
+
+  // 35. getRandomProfile
+  if (endpoint === 'getRandomProfile') {
+    const userId = parseInt(fields.user_id) || 0;
+    const reqGender = parseInt(fields.gender) || 3;
+    const user = db.users.find((u) => u.id === userId);
+    const blocked = (user?.blocked_users || '').split(',').map((s) => parseInt(s.trim())).filter(Boolean);
+    const hidden = (user?.hidden_user_ids || '').split(',').map((s) => parseInt(s.trim())).filter(Boolean);
+    blocked.push(userId);
+
+    let candidates = db.users.filter((u) => {
+      if (u.is_block === 1) return false;
+      if (u.anonymous === 1) return false;
+      if (blocked.includes(u.id)) return false;
+      if (hidden.includes(u.id)) return false;
+      if (reqGender === 1 && Number(u.gender) !== 1) return false;
+      if (reqGender === 2 && Number(u.gender) !== 2) return false;
+      return true;
+    });
+
+    if (candidates.length === 0) {
+      return jsonResponse({
+        status: false,
+        message: 'User not found!',
+        data: null,
+      });
+    }
+
+    const randomUser = candidates[Math.floor(Math.random() * candidates.length)];
+    let imgs = db.images.filter((img) => img.user_id === randomUser.id);
+    if (imgs.length === 0) {
+      imgs = [{ id: randomUser.id * 10, user_id: randomUser.id, image: 'uploads/user1.jpg' }];
+    }
+
+    return jsonResponse({
+      status: true,
+      message: 'Random profile fetched',
+      data: {
+        ...randomUser,
+        images: imgs,
+      },
+    });
+  }
+
+  // 36. deleteMyAccount
+  if (endpoint === 'deleteMyAccount') {
+    const userId = parseInt(fields.user_id) || 0;
+    const userIndex = db.users.findIndex((u) => u.id === userId);
+    if (userIndex === -1) {
+      return jsonResponse({ status: false, message: 'User not found' });
+    }
+
+    db.users.splice(userIndex, 1);
+    db.images = db.images.filter((img) => img.user_id !== userId);
+    db.posts = db.posts.filter((p) => p.user_id !== userId);
+    db.stories = (db.stories || []).filter((s) => s.user_id !== userId);
+    db.user_notification = (db.user_notification || []).filter(
+      (n) => n.user_id !== userId && n.my_user_id !== userId
+    );
+    db.redeem_requests = (db.redeem_requests || []).filter((r) => r.user_id !== userId);
+    db.live_application = (db.live_application || []).filter((a) => a.user_id !== userId);
+    db.live_history = (db.live_history || []).filter((h) => h.user_id !== userId);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Account Deleted Successfully',
+    });
+  }
+
+  // 37. addUserReport & reportPost
+  if (endpoint === 'addUserReport') {
+    const userId = parseInt(fields.user_id);
+    const reason = fields.reason || '';
+    const description = fields.description || '';
+
+    const newReport: any = {
+      id: getNextId(db.reports || []),
+      user_id: userId,
+      type: 1, // 1: User / Profile report
+      reason,
+      description,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!db.reports) db.reports = [];
+    db.reports.push(newReport);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Report submitted successfully',
+      data: newReport,
+    });
+  }
+
+  if (endpoint === 'reportPost') {
+    const postId = parseInt(fields.post_id || fields.id);
+    const reason = fields.reason || '';
+    const description = fields.description || '';
+
+    const newReport: any = {
+      id: getNextId(db.reports || []),
+      post_id: postId,
+      type: 0, // 0: Post report
+      reason,
+      description,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!db.reports) db.reports = [];
+    db.reports.push(newReport);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Post reported successfully',
+      data: newReport,
+    });
+  }
+
+  // 38. applyForLive
+  if (endpoint === 'applyForLive') {
+    const userId = parseInt(fields.user_id);
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User does not exist' });
+    }
+    if (user.can_go_live === 2) {
+      return jsonResponse({ status: false, message: 'User is already eligible for livestreaming' });
+    }
+    user.can_go_live = 1; // Pending
+    const videoUrl = files.length > 0 ? files[0].url : (fields.intro_video || '');
+    const newApp: any = {
+      id: getNextId(db.live_application || []),
+      user_id: userId,
+      about_you: fields.about_you || '',
+      languages: fields.languages || '',
+      intro_video: videoUrl,
+      social_links: fields.social_links || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!db.live_application) db.live_application = [];
+    db.live_application = db.live_application.filter((a) => a.user_id !== userId);
+    db.live_application.push(newApp);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Application submitted successfully',
+    });
+  }
+
+  // 39. addLiveStreamHistory & fetchAllLiveStreamHistory
+  if (endpoint === 'addLiveStreamHistory') {
+    const userId = parseInt(fields.user_id);
+    const user = db.users.find((u) => u.id === userId);
+    if (user) {
+      user.total_streams = (user.total_streams || 0) + 1;
+      const amount = parseFloat(fields.amount_collected) || 0;
+      user.total_collected = (user.total_collected || 0) + amount;
+      user.wallet = (user.wallet || 0) + amount;
+    }
+    const newHistory: any = {
+      id: getNextId(db.live_history || []),
+      user_id: userId,
+      started_at: fields.started_at || new Date().toISOString(),
+      streamed_for: fields.streamed_for || '00:00:00',
+      amount_collected: parseFloat(fields.amount_collected) || 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!db.live_history) db.live_history = [];
+    db.live_history.push(newHistory);
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'History added successfully!',
+      data: newHistory,
+    });
+  }
+
+  if (endpoint === 'fetchAllLiveStreamHistory') {
+    const userId = parseInt(fields.user_id);
+    const list = (db.live_history || []).filter((h) => h.user_id === userId);
+    return jsonResponse({
+      status: true,
+      message: 'data get successfully',
+      data: list,
+    });
   }
 
   // Default fallback for any unhandled /api/... routes

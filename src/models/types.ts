@@ -151,6 +151,7 @@ export interface RedeemRequest {
   payment_gateway: string;
   account_details: string;
   amount_paid: number;
+  payable_amount?: number;
   status: number; // 0 = pending, 1 = completed
   created_at: string;
   updated_at: string;

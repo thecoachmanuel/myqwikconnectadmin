@@ -17,6 +17,12 @@ export default function DashboardPage() {
     verifyRequests: 0,
     interests: 0,
     reports: 0,
+    totalDiamondCollected: 0,
+    commissionPercentage: 10,
+    platformEarnings: 0,
+    totalPayoutsPaid: 0,
+    coinRate: 0.006,
+    currency: '$',
   });
 
   const currentDate = new Date();
@@ -28,35 +34,12 @@ export default function DashboardPage() {
   const chartRef = useRef<any>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/fetchAllUsers', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchLiveApplications', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchPendingRedeems', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchCompletedRedeems', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchAllGifts', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchDiamondPackages', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchverificationRequests', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchUsersReport', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/fetchAllInterest', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/fetchPosts', { method: 'POST' }).then((r) => r.json()).catch(() => ({ data: [] })),
-    ])
-      .then(([usersRes, liveAppsRes, pendingRedRes, compRedRes, giftsRes, packsRes, verifRes, reportsRes, interestsRes, postsRes]) => {
-        const users = usersRes.data || [];
-        const posts = postsRes.data || [];
-        setStats({
-          totalUsers: users.length,
-          totalPosts: posts.length,
-          liveStreamUsers: users.filter((u: any) => u.can_go_live === 2).length,
-          blockedUsers: users.filter((u: any) => u.is_block === 1).length,
-          liveApplications: (liveAppsRes.data || []).length,
-          pendingRedeems: (pendingRedRes.data || []).length,
-          completedRedeems: (compRedRes.data || []).length,
-          gifts: (giftsRes.data || []).length,
-          diamondPacks: (packsRes.data || []).length,
-          verifyRequests: (verifRes.data || []).length,
-          reports: (reportsRes.data || []).length,
-          interests: (interestsRes.data || []).length,
-        });
+    fetch('/fetchDashboardStats', { method: 'POST' })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.status && res.data) {
+          setStats((prev) => ({ ...prev, ...res.data }));
+        }
       })
       .catch((err) => {
         console.error(err);
@@ -223,6 +206,93 @@ export default function DashboardPage() {
             <div className="card-body">
               <div dir="ltr">
                 <div id="chart-dashboard" className="apex-charts" data-colors="#B754F9,#0acf97"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Platform Financial & Diamond Metrics */}
+      <div className="row">
+        <div className="col-xl-3 col-lg-3 col-md-3 col-sm-12 col-xs-12">
+          <div className="card">
+            <div className="card-statistic-4">
+              <div className="align-items-center justify-content-between">
+                <div className="row ">
+                  <div className="col-lg-12 col-md-12 col-sm-12 col-xs-12 pr-0 ">
+                    <div className="card-icon2 mainbg">
+                      <i className="fas fa-gem maincolor"></i>
+                    </div>
+                    <div className="card-content">
+                      <h5 className="font-15 mt-3">Total Diamonds Collected</h5>
+                      <h3 className="mb-1 text-primary">{stats.totalDiamondCollected.toLocaleString()}</h3>
+                      <small className="text-muted">From all streams &amp; gifts</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-xl-3 col-lg-3 col-md-3 col-sm-12 col-xs-12">
+          <div className="card">
+            <div className="card-statistic-4">
+              <div className="align-items-center justify-content-between">
+                <div className="row ">
+                  <div className="col-lg-12 col-md-12 col-sm-12 col-xs-12 pr-0 ">
+                    <div className="card-icon2 mainbg">
+                      <i className="fas fa-hand-holding-usd maincolor"></i>
+                    </div>
+                    <div className="card-content">
+                      <h5 className="font-15 mt-3">Platform Earnings ({stats.commissionPercentage}%)</h5>
+                      <h3 className="mb-1 text-success">{stats.currency}{stats.platformEarnings.toLocaleString()}</h3>
+                      <small className="text-muted">Net stream &amp; gift commission</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-xl-3 col-lg-3 col-md-3 col-sm-12 col-xs-12">
+          <div className="card">
+            <div className="card-statistic-4">
+              <div className="align-items-center justify-content-between">
+                <div className="row ">
+                  <div className="col-lg-12 col-md-12 col-sm-12 col-xs-12 pr-0 ">
+                    <div className="card-icon2 mainbg">
+                      <i className="fas fa-money-check-alt maincolor"></i>
+                    </div>
+                    <div className="card-content">
+                      <h5 className="font-15 mt-3">Completed Payouts</h5>
+                      <h3 className="mb-1 text-warning">{stats.currency}{stats.totalPayoutsPaid.toLocaleString()}</h3>
+                      <small className="text-muted">{stats.completedRedeems} redeems fulfilled</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-xl-3 col-lg-3 col-md-3 col-sm-12 col-xs-12">
+          <div className="card">
+            <div className="card-statistic-4">
+              <div className="align-items-center justify-content-between">
+                <div className="row ">
+                  <div className="col-lg-12 col-md-12 col-sm-12 col-xs-12 pr-0 ">
+                    <div className="card-icon2 mainbg">
+                      <i className="fas fa-coins maincolor"></i>
+                    </div>
+                    <div className="card-content">
+                      <h5 className="font-15 mt-3">Diamond Coin Rate</h5>
+                      <h3 className="mb-1">{stats.currency}{stats.coinRate}</h3>
+                      <small className="text-muted">Per 1 diamond redeemed</small>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

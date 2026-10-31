@@ -11,7 +11,13 @@ export default function RedeemRequestsPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'completed'>('pending');
   const [loading, setLoading] = useState(true);
 
-  // Complete modal
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  const copyToClipboard = (text: string, id: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
   const [completingReq, setCompletingReq] = useState<any | null>(null);
   const [amountPaid, setAmountPaid] = useState<number>(0);
 
@@ -136,19 +142,20 @@ export default function RedeemRequestsPage() {
                   <th>Coin Amount</th>
                   <th>Payable Amount</th>
                   <th>Payment Gateway</th>
+                  <th>Account Number / Details</th>
                   <th style={{ width: '200px', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-4">
+                    <td colSpan={8} className="text-center py-4">
                       Loading...
                     </td>
                   </tr>
                 ) : filteredRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-4">
+                    <td colSpan={8} className="text-center py-4">
                       No {activeTab} redeem requests.
                     </td>
                   </tr>
@@ -159,6 +166,7 @@ export default function RedeemRequestsPage() {
                         ? r.user.images[0].image
                         : '/asset/img/user.png';
                     const avatarSrc = getImageUrl(avatar);
+                    const payable = r.payable_amount !== undefined ? `${r.currency || '$'}${r.payable_amount}` : `$${r.amount_paid || r.coin_amount || 0}`;
 
                     return (
                       <tr key={r.id}>
@@ -180,9 +188,26 @@ export default function RedeemRequestsPage() {
                           <small className="text-muted">@{r.user?.username || 'N/A'}</small>
                         </td>
                         <td>{r.request_id || `#REQ-${r.id}`}</td>
-                        <td>{r.coin_amount || 0}</td>
-                        <td>${r.amount_paid || r.coin_amount || 0}</td>
-                        <td>{r.payment_gateway || 'PayPal'}</td>
+                        <td><span className="badge badge-light border font-weight-bold">{r.coin_amount || 0}</span></td>
+                        <td><strong>{payable}</strong></td>
+                        <td><span className="badge badge-info">{r.payment_gateway || 'PayPal'}</span></td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <span className="font-weight-bold mr-2 text-dark" style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.account_details || 'N/A'}
+                            </span>
+                            {r.account_details && (
+                              <button
+                                type="button"
+                                className="btn btn-xs btn-outline-secondary py-0 px-2"
+                                title="Copy account number"
+                                onClick={() => copyToClipboard(r.account_details, r.id)}
+                              >
+                                {copiedId === r.id ? 'Copied!' : 'Copy'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
                         <td style={{ textAlign: 'right' }}>
                           {activeTab === 'pending' ? (
                             <>
@@ -190,7 +215,7 @@ export default function RedeemRequestsPage() {
                                 className="btn btn-sm btn-success mr-2"
                                 onClick={() => {
                                   setCompletingReq(r);
-                                  setAmountPaid(r.coin_amount || 100);
+                                  setAmountPaid(r.payable_amount || r.amount_paid || 10);
                                 }}
                               >
                                 Complete
@@ -227,7 +252,7 @@ export default function RedeemRequestsPage() {
           <div className="modal-dialog modal-dialog-centered" role="document">
             <div className="modal-content">
               <div className="modal-header">
-                <h5>Complete Payout for {completingReq.user?.fullname}</h5>
+                <h5>Complete Payout for {completingReq.user?.fullname || `User #${completingReq.user_id}`}</h5>
                 <button
                   type="button"
                   className="close"
@@ -239,8 +264,29 @@ export default function RedeemRequestsPage() {
               </div>
               <form onSubmit={handleCompleteSubmit}>
                 <div className="modal-body">
+                  <div className="alert alert-light border mb-3">
+                    <div className="mb-2"><strong>Request ID:</strong> {completingReq.request_id}</div>
+                    <div className="mb-2"><strong>Payment Gateway:</strong> <span className="badge badge-info">{completingReq.payment_gateway || 'PayPal'}</span></div>
+                    <div className="mb-2">
+                      <strong>Account Number / Details:</strong>
+                      <div className="p-2 mt-1 bg-white border rounded d-flex justify-content-between align-items-center">
+                        <code style={{ fontSize: '15px', color: '#e83e8c' }}>{completingReq.account_details || 'N/A'}</code>
+                        {completingReq.account_details && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary py-1 px-3 ml-2"
+                            onClick={() => copyToClipboard(completingReq.account_details, completingReq.id)}
+                          >
+                            {copiedId === completingReq.id ? 'Copied!' : 'Copy'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2"><strong>Coin Amount:</strong> {completingReq.coin_amount} diamonds</div>
+                  </div>
+
                   <div className="form-group mb-3">
-                    <label>Amount Paid ($)</label>
+                    <label>Amount Paid ({completingReq.currency || '$'})</label>
                     <input
                       type="number"
                       step="0.01"
@@ -260,7 +306,7 @@ export default function RedeemRequestsPage() {
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-success">
-                    Mark as Paid
+                    Mark as Paid & Complete
                   </button>
                 </div>
               </form>

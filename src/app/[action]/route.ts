@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getDb, commitDb, getNextId } from '@/lib/db';
 import { corsHeaders, handleCors, jsonResponse, parseRequestBody } from '@/lib/api-helper';
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 export async function OPTIONS() {
   return handleCors();
@@ -320,9 +321,9 @@ async function handleAction(request: NextRequest, action: string, method: string
         ...p,
         user: u
           ? {
-              ...u,
-              images: userImages,
-            }
+            ...u,
+            images: userImages,
+          }
           : null,
         contents,
         content: contents,
@@ -640,9 +641,10 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   // 12. Live Applications: fetchLiveApplications, approveApplication, deleteLiveApplication, fetchLiveApplicationDetails
-  if (action === 'fetchLiveApplicationDetails') {
-    const id = parseInt(fields.id || (request.nextUrl.searchParams.get('id') as string));
-    const app = db.live_application.find((a) => a.id === id);
+  if (action === 'fetchLiveApplicationDetails' || action === 'viewLiveApplication') {
+    const id = parseInt(fields.id || fields.application_id || (request.nextUrl.searchParams.get('id') as string));
+    const list = db.live_application || (db as any).live_applications || [];
+    const app = list.find((a: any) => a.id === id);
     if (app) {
       const u = db.users.find((user) => user.id === app.user_id);
       const userImages = u ? db.images.filter((img) => img.user_id === u.id) : [];
@@ -657,35 +659,57 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: false, message: 'Application not found' });
   }
 
+  // 12. Live Applications: fetchLiveApplications, viewLiveApplication, approveApplication, deleteLiveApplication
   if (action === 'fetchLiveApplications') {
-    const data = db.live_application.map((app) => ({
+    const list = db.live_application || (db as any).live_applications || [];
+    const data = list.map((app: any) => ({
       ...app,
       user: db.users.find((u) => u.id === app.user_id),
     }));
     return jsonResponse({ status: true, data });
   }
-  if (action === 'approveApplication') {
-    const id = parseInt(fields.id);
-    const app = db.live_application.find((a) => a.id === id);
+  if (action === 'viewLiveApplication') {
+    const id = parseInt(fields.id || fields.application_id);
+    const list = db.live_application || (db as any).live_applications || [];
+    const app = list.find((a: any) => a.id === id);
     if (app) {
       const user = db.users.find((u) => u.id === app.user_id);
-      if (user) user.can_go_live = 2;
-      db.live_application = db.live_application.filter((a) => a.id !== id);
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Application approved' });
+      return jsonResponse({ status: true, data: { ...app, user } });
     }
     return jsonResponse({ status: false, message: 'Application not found' });
   }
+  if (action === 'approveApplication') {
+    const id = parseInt(fields.id || fields.application_id);
+    const list = db.live_application || (db as any).live_applications || [];
+    const app = list.find((a: any) => a.id === id);
+    if (app) {
+      const user = db.users.find((u) => u.id === app.user_id);
+      if (user) user.can_go_live = 2;
+      db.live_application = list.filter((a: any) => a.id !== id);
+      if ((db as any).live_applications) (db as any).live_applications = db.live_application;
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Live Application Approved' });
+    }
+    return jsonResponse({ status: false, message: 'Live Application Not Found' });
+  }
   if (action === 'deleteLiveApplication') {
-    const id = parseInt(fields.id);
-    db.live_application = db.live_application.filter((a) => a.id !== id);
-    await commitDb(db);
-    return jsonResponse({ status: true, message: 'Application rejected/deleted' });
+    const id = parseInt(fields.id || fields.application_id);
+    const list = db.live_application || (db as any).live_applications || [];
+    const app = list.find((a: any) => a.id === id);
+    if (app) {
+      const user = db.users.find((u) => u.id === app.user_id);
+      if (user) user.can_go_live = 0;
+      db.live_application = list.filter((a: any) => a.id !== id);
+      if ((db as any).live_applications) (db as any).live_applications = db.live_application;
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Delete Live Application' });
+    }
+    return jsonResponse({ status: false, message: 'Live Application Not Found' });
   }
 
   // 13. Live History: fetchLiveHistory
   if (action === 'fetchLiveHistory') {
-    const data = db.live_history.map((h) => ({
+    const data = (db.live_history || []).map((h) => ({
       ...h,
       user: db.users.find((u) => u.id === h.user_id),
     }));
@@ -694,15 +718,30 @@ async function handleAction(request: NextRequest, action: string, method: string
 
   // 14. Redeem Requests: fetchPendingRedeems, fetchCompletedRedeems, completeRedeem, deleteRedeemRequest
   if (action === 'fetchPendingRedeems') {
-    const data = db.redeem_requests
+    const rate = Number(db.appdata[0]?.coin_rate) || 0.01;
+    const currency = db.appdata[0]?.currency || '$';
+    const data = (db.redeem_requests || [])
       .filter((r) => r.status === 0)
-      .map((r) => ({ ...r, user: db.users.find((u) => u.id === r.user_id) }));
+      .map((r) => {
+        const payable = parseFloat((rate * (r.coin_amount || 0)).toFixed(2));
+        return {
+          ...r,
+          user: db.users.find((u) => u.id === r.user_id),
+          payable_amount: payable,
+          currency,
+        };
+      });
     return jsonResponse({ status: true, data });
   }
   if (action === 'fetchCompletedRedeems') {
-    const data = db.redeem_requests
+    const currency = db.appdata[0]?.currency || '$';
+    const data = (db.redeem_requests || [])
       .filter((r) => r.status === 1)
-      .map((r) => ({ ...r, user: db.users.find((u) => u.id === r.user_id) }));
+      .map((r) => ({
+        ...r,
+        user: db.users.find((u) => u.id === r.user_id),
+        currency,
+      }));
     return jsonResponse({ status: true, data });
   }
   if (action === 'completeRedeem') {
@@ -757,43 +796,194 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: false, message: 'Not found' });
   }
 
-  // 16. Reports: fetchUsersReport, postReportList, rejectUserReport, deleteReport
-  if (action === 'fetchUsersReport' || action === 'postReportList') {
-    const data = db.reports.map((rep) => ({
-      ...rep,
-      user: db.users.find((u) => u.id === rep.user_id),
-    }));
+  // 16. Reports: fetchUsersReport, postReportList, rejectUserReport, deleteReport, deletePostFromReport, deletePostFromUserPostTable
+  if (action === 'fetchUsersReport') {
+    const data = (db.reports || [])
+      .filter((r) => r.type === 1)
+      .map((rep) => {
+        const user = db.users.find((u) => u.id === rep.user_id);
+        const userImgs = user ? db.images.filter((img) => img.user_id === user.id) : [];
+        return {
+          ...rep,
+          user: user ? { ...user, images: userImgs } : null,
+        };
+      });
     return jsonResponse({ status: true, data });
   }
-  if (action === 'deleteReport' || action === 'rejectUserReport') {
-    const id = parseInt(fields.id);
-    db.reports = db.reports.filter((r) => r.id !== id);
-    await commitDb(db);
-    return jsonResponse({ status: true, message: 'Report dismissed' });
+
+  if (action === 'postReportList') {
+    const data = (db.reports || [])
+      .filter((r) => r.type === 0)
+      .map((rep) => {
+        const post = db.posts.find((p) => p.id === rep.post_id);
+        const user = post ? db.users.find((u) => u.id === post.user_id) : null;
+        return {
+          ...rep,
+          post,
+          user,
+        };
+      });
+    return jsonResponse({ status: true, data });
   }
 
-  // 17. Notifications: fetchAllNotification, addNotification, deleteNotification
+  if (action === 'rejectUserReport') {
+    const reportId = parseInt(fields.report_id || fields.id);
+    const rep = (db.reports || []).find((r) => r.id === reportId);
+    if (rep) {
+      db.reports = db.reports.filter((r) => r.user_id !== rep.user_id);
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Reject User Report Successfully' });
+    }
+    return jsonResponse({ status: false, message: 'Report Not Found' });
+  }
+
+  if (action === 'deleteReport') {
+    const reportId = parseInt(fields.report_id || fields.id);
+    db.reports = (db.reports || []).filter((r) => r.id !== reportId);
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Report Delete Successfully' });
+  }
+
+  if (action === 'deletePostFromReport' || action === 'deletePostFromUserPostTable') {
+    const postId = parseInt(fields.post_id || fields.id);
+    const reportId = parseInt(fields.report_id);
+    db.posts = (db.posts || []).filter((p) => p.id !== postId);
+    db.comments = (db.comments || []).filter((c) => c.post_id !== postId);
+    if (db.likes) db.likes = db.likes.filter((l) => l.post_id !== postId);
+    db.reports = (db.reports || []).filter((r) => r.post_id !== postId && r.id !== reportId);
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Post Delete Successfully' });
+  }
+
+  // 17. Posts List for Admin: postsList
+  if (action === 'postsList') {
+    const data = (db.posts || []).map((p) => {
+      const user = db.users.find((u) => u.id === p.user_id);
+      const postComments = (db.comments || []).filter((c) => c.post_id === p.id);
+      const postLikes = (db.likes || []).filter((l) => l.post_id === p.id);
+      return {
+        ...p,
+        user,
+        comments_count: postComments.length || p.comments_count || 0,
+        likes_count: postLikes.length || p.likes_count || 0,
+      };
+    });
+    return jsonResponse({ status: true, data });
+  }
+
+  // 18. Notifications: fetchAllNotification, addNotification, repeatNotification, updateNotification, deleteNotification
   if (action === 'fetchAllNotification') {
-    return jsonResponse({ status: true, data: db.admin_notification });
+    return jsonResponse({ status: true, data: db.admin_notification || [] });
   }
   if (action === 'addNotification' || action === 'repeatNotification') {
     const newNotif = {
-      id: getNextId(db.admin_notification),
+      id: getNextId(db.admin_notification || []),
       title: fields.title || '',
       message: fields.message || '',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+    if (!db.admin_notification) db.admin_notification = [];
     db.admin_notification.push(newNotif);
 
+    // Also push to in-app platform notifications for all active users
+    (db.users || []).forEach((u) => {
+      if (u.is_notification !== 0) {
+        if (!db.user_notification) db.user_notification = [];
+        db.user_notification.push({
+          id: getNextId(db.user_notification),
+          my_user_id: 1, // Admin user
+          user_id: u.id,
+          item_id: newNotif.id,
+          type: 4, // Admin notification
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+    });
+
     await commitDb(db);
-    return jsonResponse({ status: true, message: 'Notification sent', data: newNotif });
+    return jsonResponse({ status: true, message: 'Notification sent successfully', data: newNotif });
+  }
+  if (action === 'updateNotification') {
+    const id = parseInt(fields.id);
+    const n = (db.admin_notification || []).find((item) => item.id === id);
+    if (n) {
+      if (fields.title) n.title = fields.title;
+      if (fields.message) n.message = fields.message;
+      n.updated_at = new Date().toISOString();
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Notification Updated Successfully' });
+    }
+    return jsonResponse({ status: false, message: 'Notification not found' });
   }
   if (action === 'deleteNotification') {
-    const id = parseInt(fields.id);
-    db.admin_notification = db.admin_notification.filter((n) => n.id !== id);
+    const id = parseInt(fields.notification_id || fields.id);
+    db.admin_notification = (db.admin_notification || []).filter((n) => n.id !== id);
     await commitDb(db);
-    return jsonResponse({ status: true, message: 'Notification deleted' });
+    return jsonResponse({ status: true, message: 'Notification Deleted Successfully' });
+  }
+
+  // 19. Onboarding: onboardingList, addOnboarding, updateOnboardingScreen, deleteOnboardingScreen, updateOnboardingOrder
+  if (action === 'onboardingList') {
+    const list = db.onboarding_screens || (db as any).onboarding || [];
+    const sorted = [...list].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+    return jsonResponse({ status: true, data: sorted });
+  }
+  if (action === 'addOnboarding') {
+    const list = db.onboarding_screens || (db as any).onboarding || [];
+    const imageUrl = files.length > 0 ? files[0].url : (fields.image || '');
+    const newSlide: any = {
+      id: getNextId(list),
+      title: fields.title || '',
+      description: fields.description || '',
+      position: list.length + 1,
+      image: imageUrl,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!db.onboarding_screens) db.onboarding_screens = [];
+    db.onboarding_screens.push(newSlide);
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Onboarding added successfully!', data: newSlide });
+  }
+  if (action === 'updateOnboardingScreen') {
+    const id = parseInt(fields.id || fields.onboarding_id);
+    const list = db.onboarding_screens || (db as any).onboarding || [];
+    const slide = list.find((s: any) => s.id === id);
+    if (slide) {
+      if (fields.title) slide.title = fields.title;
+      if (fields.description) slide.description = fields.description;
+      if (files.length > 0) slide.image = files[0].url;
+      else if (fields.image) slide.image = fields.image;
+      slide.updated_at = new Date().toISOString();
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Onboarding Screen Updated Successfully!', data: slide });
+    }
+    return jsonResponse({ status: false, message: 'Onboarding Screen Not Found' });
+  }
+  if (action === 'deleteOnboardingScreen') {
+    const id = parseInt(fields.id || fields.onboarding_id);
+    const list = db.onboarding_screens || (db as any).onboarding || [];
+    db.onboarding_screens = list.filter((s: any) => s.id !== id);
+    // Reorder positions
+    db.onboarding_screens.forEach((s: any, idx: number) => {
+      s.position = idx + 1;
+    });
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Onboarding Screen Deleted Successfully.' });
+  }
+  if (action === 'updateOnboardingOrder') {
+    const order = fields.order || [];
+    const list = db.onboarding_screens || (db as any).onboarding || [];
+    if (Array.isArray(order)) {
+      order.forEach((id: any, index: number) => {
+        const item = list.find((s: any) => s.id === parseInt(id));
+        if (item) item.position = index + 1;
+      });
+      await commitDb(db);
+    }
+    return jsonResponse({ status: true, message: 'Onboarding order updated successfully.' });
   }
 
   // Feature Toggles: changeFromDatingAppToLivestreamApp, changeFromSocialMedia, includeFakeUserInMatching
@@ -853,6 +1043,47 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: false, message: 'Failed to update password' });
   }
 
+  if (action === 'generateAgoraToken') {
+    const channelName = fields.channelName || 'orange_live';
+    const uid = fields.uid ? parseInt(fields.uid) : 0;
+    const appId = process.env.AGORA_APP_ID || '';
+    const appCertificate = process.env.AGORA_APP_CERT || process.env.AGORA_APP_CERTIFICATE || '';
+
+    if (appId && appCertificate) {
+      try {
+        const role = RtcRole.PUBLISHER;
+        const expirationTimeInSeconds = 7200;
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+        const token = RtcTokenBuilder.buildTokenWithUid(
+          appId,
+          appCertificate,
+          channelName,
+          uid,
+          role,
+          privilegeExpiredTs,
+          privilegeExpiredTs
+        );
+
+        return jsonResponse({
+          status: true,
+          message: 'generated successfully',
+          token,
+        });
+      } catch (err: any) {
+        console.error('Agora token build error:', err);
+      }
+    }
+
+    const mockToken = `AGORA_TOKEN_${channelName}_${Date.now()}`;
+    return jsonResponse({
+      status: true,
+      message: 'generated successfully',
+      token: mockToken,
+    });
+  }
+
   if (action === 'fetchChartData') {
     const month = parseInt(fields.month as string) || (new Date().getMonth() + 1);
     const year = parseInt(fields.year as string) || new Date().getFullYear();
@@ -885,6 +1116,57 @@ async function handleAction(request: NextRequest, action: string, method: string
       status: true,
       message: 'Chart data fetched successfully.',
       data: datesWithCount,
+    });
+  }
+
+  if (action === 'fetchDashboardStats') {
+    const appdata = (db.appdata[0] || {}) as any;
+    const coinRate = parseFloat(appdata.coin_rate?.toString() || '0.006');
+    const commissionPercent = parseFloat(appdata.stream_and_gift_commission?.toString() || '10');
+    const currency = appdata.currency || '$';
+
+    const users = db.users || [];
+    const posts = db.posts || [];
+    const liveApplications = db.live_application || (db as any).live_applications || [];
+    const redeems = db.redeem_requests || [];
+    const liveHistory = db.live_history || [];
+
+    const totalCollectedDiamonds = (users.reduce((sum, u) => sum + (Number(u.total_collected) || 0), 0)) +
+      (liveHistory.reduce((sum, h) => sum + (Number(h.amount_collected) || 0), 0));
+
+    const totalPlatformCommissionDiamonds = Math.round(totalCollectedDiamonds * (commissionPercent / 100));
+    const platformEarningsCurrency = Number((totalPlatformCommissionDiamonds * coinRate).toFixed(2));
+
+    const completedRedeems = redeems.filter((r) => r.status === 1);
+    const totalPayoutsPaid = Number(
+      completedRedeems
+        .reduce((sum, r) => sum + (Number(r.payable_amount) || (Number(r.coin_amount) * coinRate)), 0)
+        .toFixed(2)
+    );
+
+    return jsonResponse({
+      status: true,
+      message: 'Dashboard stats fetched successfully',
+      data: {
+        totalUsers: users.length,
+        totalPosts: posts.length,
+        liveStreamUsers: users.filter((u) => u.can_go_live === 2).length,
+        blockedUsers: users.filter((u) => u.is_block === 1).length,
+        liveApplications: liveApplications.length,
+        pendingRedeems: redeems.filter((r) => r.status === 0).length,
+        completedRedeems: completedRedeems.length,
+        diamondPacks: (db.diamond_packs || []).length,
+        gifts: (db.gifts || []).length,
+        verifyRequests: (db.verification_request || []).length,
+        reports: (db.reports || []).length,
+        interests: (db.interests || []).length,
+        totalDiamondCollected: totalCollectedDiamonds,
+        commissionPercentage: commissionPercent,
+        platformEarnings: platformEarningsCurrency,
+        totalPayoutsPaid,
+        coinRate,
+        currency,
+      },
     });
   }
 

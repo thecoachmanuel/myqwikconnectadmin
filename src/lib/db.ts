@@ -44,6 +44,7 @@ interface DatabaseData {
   user_notification: UserNotification[];
   following_lists: { id: number; my_user_id: number; user_id: number; created_at: string; updated_at: string }[];
   liked_profiles: { id: number; my_user_id: number; user_id: number; created_at: string; updated_at: string }[];
+  likes?: { id: number; post_id: number; user_id: number; created_at?: string }[];
 }
 
 const defaultData: DatabaseData = {

@@ -116,3 +116,4 @@ if (db.appdata && db.appdata.length > 0) {
 
 fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), 'utf8');
 console.log('Successfully updated Terms of Use and Privacy Policy in db.json!');
+
