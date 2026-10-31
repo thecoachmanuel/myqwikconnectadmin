@@ -14,3 +14,4 @@ export function getImageUrl(path?: string | null): string {
   if (clean.startsWith('uploads/')) return `/storage/${clean}`;
   return `/storage/uploads/${clean}`;
 }
+

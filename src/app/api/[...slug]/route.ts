@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 async function handleRequest(request: NextRequest, endpoint: string, method: string) {
-  const db = getDb();
+  const db = await getDb();
   const { fields, files } = await parseRequestBody(request);
 
   // Combine query parameters if GET

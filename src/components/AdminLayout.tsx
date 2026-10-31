@@ -18,6 +18,14 @@ export default function AdminLayout({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
+    // Check authentication
+    const hasSession = document.cookie
+      .split(';')
+      .some((c) => c.trim().startsWith('admin_session=') && c.split('=')[1]?.trim() !== '');
+    if (!hasSession) {
+      router.push('/');
+    }
+
     fetch('/api/getSettingData')
       .then((res) => res.json())
       .then((res) => {
@@ -27,7 +35,7 @@ export default function AdminLayout({
         }
       })
       .catch(() => {});
-  }, []);
+  }, [pathname, router]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -85,12 +93,10 @@ export default function AdminLayout({
 
   const handleLogout = async () => {
     try {
-      await fetch('/logout');
-      document.cookie = 'admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-      router.push('/');
-    } catch {
-      router.push('/');
-    }
+      await fetch('/logout', { method: 'POST' });
+    } catch {}
+    document.cookie = 'admin_session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;';
+    router.push('/');
   };
 
   const navItems = [

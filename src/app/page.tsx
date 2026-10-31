@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin@123!@#');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -21,6 +21,14 @@ export default function LoginPage() {
   const [forgotMsg, setForgotMsg] = useState('');
 
   useEffect(() => {
+    // If already authenticated, redirect to dashboard
+    const hasSession = document.cookie
+      .split(';')
+      .some((c) => c.trim().startsWith('admin_session=') && c.split('=')[1]?.trim() !== '');
+    if (hasSession) {
+      router.push('/dashboard');
+    }
+
     fetch('/api/getSettingData')
       .then((res) => res.json())
       .then((res) => {
@@ -29,7 +37,7 @@ export default function LoginPage() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +53,6 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.status) {
-        document.cookie = 'admin_session=1; Path=/; Max-Age=86400;';
         router.push('/dashboard');
       } else {
         setErrorMsg(data.message || 'Invalid username or password');

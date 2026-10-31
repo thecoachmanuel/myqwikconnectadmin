@@ -7,12 +7,12 @@ export async function GET(
   { params }: { params: Promise<{ value: string }> }
 ) {
   const { value } = await params;
-  const db = getDb();
+  const db = await getDb();
   const appdata = db.appdata[0];
   if (appdata) {
     appdata.include_fake_user_in_matching = parseInt(value) || 0;
     appdata.updated_at = new Date().toISOString();
-    commitDb(db);
+    await commitDb(db);
   }
   return jsonResponse({ status: true, message: 'Updated successfully' });
 }

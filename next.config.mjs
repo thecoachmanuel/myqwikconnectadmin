@@ -25,6 +25,13 @@ const nextConfig = {
           { key: 'Access-Control-Allow-Methods', value: 'GET,HEAD,OPTIONS' },
         ],
       },
+      {
+        source: '/uploads/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,HEAD,OPTIONS' },
+        ],
+      },
     ];
   },
   async rewrites() {

@@ -58,7 +58,10 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': contentType,
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
   });
 }
+

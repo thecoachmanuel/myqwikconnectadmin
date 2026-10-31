@@ -1,6 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import mongoose from 'mongoose';
+import dns from 'dns';
+
+// Ensure DNS resolution works reliably for MongoDB Atlas SRV connection strings
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignore in environments where setting DNS servers is restricted
+}
 import {
   AdminUser, AppData, User, UserImage, Interest, DiamondPack, Gift,
   LiveApplication, LiveHistory, RedeemRequest, VerificationRequest,
@@ -469,46 +477,195 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 function ensureDataFile(): DatabaseData {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf8');
-    return defaultData;
-  }
   try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(DB_FILE)) {
+      fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf8');
+      return defaultData;
+    }
     const raw = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     return { ...defaultData, ...parsed };
-  } catch (err) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf8');
+  } catch {
     return defaultData;
   }
 }
 
 function saveData(data: DatabaseData) {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch {
+    // Read-only filesystem on serverless environments (e.g. Vercel) is safely handled
   }
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
-// Memory cache
+// Global cached database connection & memory state
 let dbCache: DatabaseData | null = null;
+let lastMongoSync = 0;
 
-export function getDb(): DatabaseData {
+interface MongoGlobalCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
+
+const globalCache: MongoGlobalCache = ((global as any).mongooseCached =
+  (global as any).mongooseCached || { conn: null, promise: null });
+
+export async function connectMongoDB(): Promise<typeof mongoose | null> {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) return null;
+
+  if (globalCache.conn && mongoose.connection.readyState === 1) {
+    return globalCache.conn;
+  }
+
+  if (!globalCache.promise) {
+    const dbName = process.env.MONGODB_DB_NAME || 'myqwikconnectadmin';
+    globalCache.promise = mongoose
+      .connect(uri, {
+        dbName,
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 5000,
+      })
+      .then((m) => {
+        console.log(`[MongoDB] Connected successfully to database '${m.connection.db?.databaseName || dbName}'`);
+        return m;
+      })
+      .catch((err) => {
+        globalCache.promise = null;
+        console.error('[MongoDB] Connection error:', err.message);
+        return null as any;
+      });
+  }
+
+  globalCache.conn = await globalCache.promise;
+  return globalCache.conn;
+}
+
+// Synchronous fallback accessor for in-memory / local state
+export function getDbSync(): DatabaseData {
   if (!dbCache) {
     dbCache = ensureDataFile();
   }
   return dbCache;
 }
 
-export function commitDb(updated?: DatabaseData) {
+// Async Database accessor: fetches from MongoDB Atlas if available with automatic seeding and caching
+export async function getDb(): Promise<DatabaseData> {
+  // If MongoDB URI is configured, ensure connection and sync state
+  if (process.env.MONGODB_URI) {
+    try {
+      const conn = await connectMongoDB();
+      if (conn && mongoose.connection.db) {
+        const db = mongoose.connection.db;
+        const now = Date.now();
+
+        // Refresh cache from MongoDB if empty or older than 2 seconds (for fresh multi-instance sync)
+        if (!dbCache || now - lastMongoSync > 2000) {
+          const stateDoc = await db.collection('app_data_state').findOne({ _id: 'master' as any });
+
+          if (stateDoc && stateDoc.data) {
+            dbCache = { ...defaultData, ...stateDoc.data };
+            lastMongoSync = now;
+          } else {
+            // First time setup on MongoDB: auto-seed from local data or defaults
+            const initial = dbCache || ensureDataFile();
+            await db.collection('app_data_state').updateOne(
+              { _id: 'master' as any },
+              { $set: { data: initial, updatedAt: new Date() } },
+              { upsert: true }
+            );
+
+            // Also seed key collections for direct Atlas management
+            const syncCols = [
+              'users', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
+              'interests', 'package', 'diamond_packs', 'reports',
+              'verification_request', 'live_application', 'live_history',
+              'redeem_requests', 'onboarding_screens', 'pages', 'languages',
+              'relationship_goals', 'religions'
+            ];
+            for (const col of syncCols) {
+              const items = (initial as any)[col];
+              if (Array.isArray(items) && items.length > 0) {
+                try {
+                  await db.collection(col).deleteMany({});
+                  await db.collection(col).insertMany(items);
+                } catch {}
+              }
+            }
+
+            dbCache = initial;
+            lastMongoSync = now;
+            console.log('[MongoDB] Auto-seeded database with initial data.');
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('[MongoDB] Sync fallback to local state:', err.message);
+    }
+  }
+
+  if (!dbCache) {
+    dbCache = ensureDataFile();
+  }
+  return dbCache;
+}
+
+// Commit changes: Persists to in-memory cache, local JSON file, and MongoDB Atlas in real time
+export async function commitDb(updated?: DatabaseData): Promise<void> {
   if (updated) {
     dbCache = updated;
   }
-  if (dbCache) {
-    saveData(dbCache);
+  if (!dbCache) return;
+
+  // 1. Save to local data file (if writable)
+  saveData(dbCache);
+
+  // 2. Persist to MongoDB Atlas if connection is active
+  if (process.env.MONGODB_URI) {
+    try {
+      const conn = await connectMongoDB();
+      if (conn && mongoose.connection.db) {
+        const db = mongoose.connection.db;
+        lastMongoSync = Date.now();
+
+        // Atomic update of master state document
+        await db.collection('app_data_state').updateOne(
+          { _id: 'master' as any },
+          { $set: { data: dbCache, updatedAt: new Date() } },
+          { upsert: true }
+        );
+
+        // Asynchronously mirror key collections to MongoDB for direct MongoDB queries & management
+        const syncCols = [
+          'users', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
+          'interests', 'package', 'diamond_packs', 'reports',
+          'verification_request', 'live_application', 'live_history',
+          'redeem_requests'
+        ];
+
+        Promise.all(
+          syncCols.map(async (col) => {
+            const list = (dbCache as any)?.[col];
+            if (Array.isArray(list)) {
+              try {
+                await db.collection(col).deleteMany({});
+                if (list.length > 0) {
+                  await db.collection(col).insertMany(list);
+                }
+              } catch {}
+            }
+          })
+        ).catch(() => {});
+      }
+    } catch (err: any) {
+      console.warn('[MongoDB] Commit persistence notice:', err.message);
+    }
   }
 }
 
@@ -516,30 +673,5 @@ export function commitDb(updated?: DatabaseData) {
 export function getNextId<T extends { id: number }>(items: T[]): number {
   if (!items || items.length === 0) return 1;
   return Math.max(...items.map((i) => i.id || 0)) + 1;
-}
-
-// MongoDB Connection Handler (attempts connect if MONGODB_URI is provided, logs gracefully)
-let isMongoConnected = false;
-
-export async function connectMongoDB() {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/orange';
-  if (isMongoConnected) return true;
-
-  try {
-    if (mongoose.connection.readyState === 1) {
-      isMongoConnected = true;
-      return true;
-    }
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 2000,
-      connectTimeoutMS: 2000,
-    });
-    isMongoConnected = true;
-    console.log('[MongoDB] Successfully connected to:', uri);
-    return true;
-  } catch (err: any) {
-    console.log('[MongoDB] Notice: Running in standalone persistence mode (file-backed MongoDB sync). Mongo server connection:', err.message);
-    return false;
-  }
 }
 

@@ -17,29 +17,59 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 async function handleAction(request: NextRequest, action: string, method: string) {
-  const db = getDb();
+  const db = await getDb();
   const { fields, files } = await parseRequestBody(request);
 
   // 1. loginForm
   if (action === 'loginForm') {
-    const username = fields.user_name || fields.username;
-    const password = fields.user_password || fields.password;
+    const inputUser = (fields.user_name || fields.username || '').toString().trim();
+    const inputPass = (fields.user_password || fields.password || '').toString();
 
-    const admin = db.admin_user.find(
-      (a) => a.user_name === username && a.user_password === password
-    );
+    // Check environment variables configured in Vercel
+    const envUser = (process.env.ADMIN_USERNAME || process.env.ADMIN_USER || process.env.ADMIN_EMAIL || '').trim();
+    const envPass = (process.env.ADMIN_PASSWORD || process.env.ADMIN_PASS || '').trim();
 
-    if (admin) {
+    let authenticated = false;
+    let adminRecord: any = null;
+
+    if (envUser && envPass) {
+      if (inputUser === envUser && inputPass === envPass) {
+        authenticated = true;
+        adminRecord = {
+          id: 1,
+          user_name: envUser,
+          user_type: 1,
+        };
+      }
+    }
+
+    // Fallback: check database records in db.admin_user (from MongoDB or db.json)
+    if (!authenticated) {
+      const match = (db.admin_user || []).find(
+        (a) => a.user_name === inputUser && a.user_password === inputPass
+      );
+      if (match) {
+        authenticated = true;
+        adminRecord = match;
+      }
+    }
+
+    if (authenticated && adminRecord) {
       const response = jsonResponse({
         status: true,
         message: 'login successfully.',
-        data: admin,
+        data: adminRecord,
       });
 
       // Set admin session cookie
-      response.cookies.set('admin_session', JSON.stringify({ user_name: admin.user_name, user_type: admin.user_type }), {
+      response.cookies.set('admin_session', JSON.stringify({
+        user_name: adminRecord.user_name,
+        user_type: adminRecord.user_type,
+        timestamp: Date.now(),
+      }), {
         path: '/',
         httpOnly: false,
+        sameSite: 'lax',
         maxAge: 86400 * 7,
       });
 
@@ -56,9 +86,13 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'logout') {
     const response = jsonResponse({
       status: true,
-      message: 'Logged out',
+      message: 'Logged out successfully',
     });
-    response.cookies.delete('admin_session');
+    response.cookies.set('admin_session', '', {
+      path: '/',
+      expires: new Date(0),
+      maxAge: 0,
+    });
     return response;
   }
 
