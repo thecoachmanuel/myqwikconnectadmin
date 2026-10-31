@@ -23,6 +23,7 @@ function ViewUserContent() {
   const [state, setState] = useState('');
   const [city, setCity] = useState('');
   const [password, setPassword] = useState('');
+  const [isVerified, setIsVerified] = useState<number>(0);
   const [showAddImageModal, setShowAddImageModal] = useState(false);
   const [newImageFile, setNewImageFile] = useState<File | null>(null);
 
@@ -45,6 +46,7 @@ function ViewUserContent() {
           setState(u.state || '');
           setCity(u.city || '');
           setPassword(u.password || '');
+          setIsVerified(u.is_verified ?? 0);
         }
         setLoading(false);
       })
@@ -130,6 +132,7 @@ function ViewUserContent() {
         state,
         city,
         password,
+        is_verified: isVerified,
       }),
     });
     alert('User updated successfully');
@@ -168,6 +171,12 @@ function ViewUserContent() {
             {user.fullname}
             {user.can_go_live === 2 && (
               <span className="ml-2 badge bg-success text-white fw-normal px-3">Can Go Live</span>
+            )}
+            {user.is_verified === 2 && (
+              <span className="ml-2 badge bg-info text-white fw-normal px-3"><i className="fa fa-check-circle mr-1"></i>Verified</span>
+            )}
+            {user.is_verified === 1 && (
+              <span className="ml-2 badge bg-warning text-dark fw-normal px-3"><i className="fa fa-clock mr-1"></i>Verification Pending</span>
             )}
             {user.is_fake === 1 ? (
               <span className="ml-2 badge bg-dark text-white fw-normal px-3">Fake User</span>
@@ -353,6 +362,19 @@ function ViewUserContent() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>Verification Status</label>
+                  <select
+                    className="form-control"
+                    value={isVerified}
+                    onChange={(e) => setIsVerified(parseInt(e.target.value))}
+                  >
+                    <option value={0}>0 - Unverified</option>
+                    <option value={1}>1 - Pending Verification Review</option>
+                    <option value={2}>2 - Verified (Blue Checkmark)</option>
+                  </select>
                 </div>
 
                 <div className="form-group mb-0">

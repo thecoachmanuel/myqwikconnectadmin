@@ -19,6 +19,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return handleRequest(request, endpoint, 'POST');
 }
 
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 async function handleRequest(request: NextRequest, endpoint: string, method: string) {
   const db = await getDb();
   const { fields, files } = await parseRequestBody(request);
@@ -356,6 +368,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       list = list.filter((u) => !u.is_fake);
     }
 
+    // Exclude anonymous users
+    list = list.filter((u) => u.anonymous !== 1);
+
     if (reqGender === 1 || reqGender === 2) {
       list = list.filter((u) => Number(u.gender) === reqGender);
     }
@@ -425,11 +440,52 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       list = list.filter((u) => !u.is_fake);
     }
 
-    // Apply gender preference if exists
+    // Exclude anonymous users
+    list = list.filter((u) => u.anonymous !== 1);
+
+    // Exclude users who turned on Anonymous mode
+    list = list.filter((u) => u.anonymous !== 1);
+
+    // Apply gender preference if exists (1 = Male, 2 = Female, 3 = Both)
     if (currentUser?.gender_preferred && currentUser.gender_preferred !== 3) {
       const filtered = list.filter((u) => u.gender === currentUser.gender_preferred);
       if (filtered.length > 0) {
         list = filtered;
+      }
+    }
+
+    // Apply age preference if set
+    if (currentUser?.age_preferred_min && currentUser?.age_preferred_max) {
+      const minAge = currentUser.age_preferred_min;
+      const maxAge = currentUser.age_preferred_max;
+      const ageFiltered = list.filter((u) => {
+        let age = parseInt(String(u.age || '0'));
+        if (!age && u.dob) {
+          const birthYear = new Date(u.dob).getFullYear();
+          if (!isNaN(birthYear)) age = new Date().getFullYear() - birthYear;
+        }
+        if (!age) return true;
+        return age >= minAge && age <= maxAge;
+      });
+      if (ageFiltered.length > 0) {
+        list = ageFiltered;
+      }
+    }
+
+    // Apply distance preference if coordinates available
+    if (currentUser?.distance_preference && currentUser.distance_preference > 0) {
+      const userLat = parseFloat(currentUser.lattitude || currentUser.latitude || '0');
+      const userLon = parseFloat(currentUser.longitude || '0');
+      if (!isNaN(userLat) && !isNaN(userLon) && userLat !== 0 && userLon !== 0) {
+        const distFiltered = list.filter((u) => {
+          const uLat = parseFloat(u.lattitude || u.latitude || '0');
+          const uLon = parseFloat(u.longitude || '0');
+          if (isNaN(uLat) || isNaN(uLon) || (uLat === 0 && uLon === 0)) return true;
+          return getDistanceKm(userLat, userLon, uLat, uLon) <= currentUser.distance_preference!;
+        });
+        if (distFiltered.length > 0) {
+          list = distFiltered;
+        }
       }
     }
 
@@ -483,6 +539,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (appdata && appdata.include_fake_user_in_matching === 0) {
       list = list.filter((u) => !u.is_fake);
     }
+
+    // Exclude anonymous users
+    list = list.filter((u) => u.anonymous !== 1);
 
     // Gender filter (1 = male, 2 = female, 3 = both)
     if (fields.gender !== undefined && fields.gender !== '') {
@@ -579,19 +638,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const lon = parseFloat(fields.long || fields.longitude);
     const km = parseFloat(fields.km) || 500;
 
-    function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * (Math.PI / 180);
-      const dLon = (lon2 - lon1) * (Math.PI / 180);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    let users = db.users.filter((u) => u.is_block === 0 && u.show_on_map !== 0);
+    let users = db.users.filter((u) => u.is_block === 0 && u.show_on_map !== 0 && u.anonymous !== 1);
 
     if (!isNaN(lat) && !isNaN(lon)) {
       const nearby = users.filter((u) => {
@@ -669,10 +716,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   if (endpoint === 'fetchSavedProfiles') {
     const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
     const currentUser = db.users.find((u) => u.id === currentUserId);
-    const savedIds = (currentUser?.savedprofile || '')
+    const savedIds = (currentUser?.savedprofile || (currentUser as any)?.saved_profile || '')
       .split(',')
-      .map((id) => parseInt(id.trim()))
-      .filter((id) => !isNaN(id) && id > 0);
+      .map((id: string) => parseInt(id.trim()))
+      .filter((id: number) => !isNaN(id) && id > 0);
 
     let savedList = db.users.filter((u) => savedIds.includes(u.id));
 
@@ -751,6 +798,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (user) {
       if (fields.profiles !== undefined) {
         user.savedprofile = fields.profiles.toString();
+        (user as any).saved_profile = fields.profiles.toString();
       }
       user.updated_at = new Date().toISOString();
       user.images = db.images.filter((img) => img.user_id === user.id);
@@ -1029,6 +1077,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       if (endpoint === 'onOffVideoCalls') user.is_video_call = parseInt(fields.is_video_call) || 0;
       if (endpoint === 'updateLiveStatus') user.is_live_now = parseInt(fields.is_live_now) || 0;
 
+      let userImgs = db.images.filter((img) => img.user_id === user.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+      }
+      user.images = userImgs;
+
       await commitDb(db);
       return jsonResponse({
         status: true,
@@ -1113,6 +1167,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       updated_at: new Date().toISOString(),
     };
     db.verification_request.push(newReq);
+    const user = db.users.find((u) => u.id === userId);
+    if (user) {
+      user.is_verified = 1;
+    }
     await commitDb(db);
 
     return jsonResponse({
@@ -1305,8 +1363,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // Helper: Prune stories older than 24 hours
+  const pruneExpiredStories = (database: typeof db): boolean => {
+    if (!database.stories || !Array.isArray(database.stories)) return false;
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const initialLength = database.stories.length;
+    database.stories = database.stories.filter((s: Story) => {
+      if (!s.created_at) return true;
+      const storyTime = new Date(s.created_at).getTime();
+      return !isNaN(storyTime) && storyTime >= cutoff;
+    });
+    return database.stories.length !== initialLength;
+  };
+
   // 23. stories & posts
   if (endpoint === 'fetchStories') {
+    if (pruneExpiredStories(db)) await commitDb(db);
     const usersWithStories = db.users
       .filter((u) => u.is_block === 0)
       .map((u) => {
@@ -1317,7 +1389,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           images: imgs,
           stories: (db.stories || []).filter((s) => s.user_id === u.id),
         };
-      });
+      })
+      .filter((u) => (u.stories || []).length > 0);
 
     return jsonResponse({
       status: true,
@@ -1327,6 +1400,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   if (endpoint === 'fetchHomePageData') {
+    if (pruneExpiredStories(db)) await commitDb(db);
     const appdata = db.appdata[0];
     if (appdata && appdata.is_social_media === 0) {
       return jsonResponse({
@@ -1370,7 +1444,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           images: imgs,
           stories: (db.stories || []).filter((s) => s.user_id === u.id),
         };
-      });
+      })
+      .filter((u) => (u.stories || []).length > 0);
 
     return jsonResponse({
       status: true,
@@ -1493,6 +1568,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 26. addComment & fetchComments & deleteComment
   if (endpoint === 'addComment') {
+    const desc = (fields.description || '').trim();
+    if (!desc) {
+      return jsonResponse({ status: false, message: 'Comment cannot be empty' });
+    }
     const postId = parseInt(fields.post_id);
     const userId = parseInt(fields.user_id);
     const post = db.posts.find((p) => p.id === postId);
@@ -1501,12 +1580,26 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         id: getNextId(db.comments),
         user_id: userId,
         post_id: postId,
-        description: fields.description || '',
+        description: desc,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       db.comments.push(newComment);
       post.comments_count = (post.comments_count || 0) + 1;
+
+      // Add user notification if commenter is not post owner
+      if (post.user_id && post.user_id !== userId) {
+        db.user_notification.push({
+          id: getNextId(db.user_notification),
+          my_user_id: userId,
+          user_id: post.user_id,
+          item_id: newComment.id,
+          type: 2, // notificationTypeComment
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+
       await commitDb(db);
 
       const user = db.users.find((u) => u.id === userId);
@@ -1660,6 +1753,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 29. Stories: createStory, viewStory, deleteStory, fetchMyStories
   if (endpoint === 'createStory') {
+    pruneExpiredStories(db);
     const userId = parseInt(fields.user_id);
     const contentUrl = files.length > 0 ? files[0].url : (fields.content || '');
     const newStory: Story = {
@@ -1700,6 +1794,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   if (endpoint === 'fetchMyStories') {
+    if (pruneExpiredStories(db)) await commitDb(db);
     const userId = parseInt(fields.user_id);
     const myStories = db.stories.filter((s) => s.user_id === userId);
     return jsonResponse({ status: true, message: 'Fetch stories', data: myStories });
@@ -1707,6 +1802,29 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 30. pushNotificationToSingleUser
   if (endpoint === 'pushNotificationToSingleUser') {
+    try {
+      const msg = fields.message || fields;
+      const token = msg.token || fields.token;
+      const title = msg.notification?.title || msg.data?.title || fields.title || '';
+      if (token) {
+        const targetUser = db.users.find((u) => u.device_token === token);
+        if (targetUser && targetUser.is_notification !== 0) {
+          const senderUser = db.users.find((u) => u.fullname === title);
+          if (senderUser && senderUser.id !== targetUser.id) {
+            db.user_notification.push({
+              id: getNextId(db.user_notification),
+              my_user_id: senderUser.id,
+              user_id: targetUser.id,
+              item_id: senderUser.id,
+              type: 4,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+            await commitDb(db);
+          }
+        }
+      }
+    } catch (_) {}
     return jsonResponse({ status: true, message: 'Notification sent' });
   }
 

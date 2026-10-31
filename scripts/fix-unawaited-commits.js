@@ -26,3 +26,4 @@ const actionRoute = path.join(__dirname, '../src/app/[action]/route.ts');
 
 fixFile(slugRoute);
 fixFile(actionRoute);
+

@@ -198,7 +198,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       total_streams: 0,
       device_type: 1,
       is_notification: 1,
-      is_verified: 1,
+      is_verified: 2,
       show_on_map: 1,
       anonymous: 0,
       is_video_call: 1,
@@ -271,6 +271,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       if (fields.country) user.country = fields.country;
       if (fields.state) user.state = fields.state;
       if (fields.city) user.city = fields.city;
+      if (fields.is_verified !== undefined) user.is_verified = parseInt(fields.is_verified);
       if (fields.password) user.password = fields.password;
       user.updated_at = new Date().toISOString();
       await commitDb(db);
@@ -737,7 +738,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (v) {
       v.status = 1;
       const user = db.users.find((u) => u.id === v.user_id);
-      if (user) user.is_verified = 1;
+      if (user) user.is_verified = 2;
       await commitDb(db);
       return jsonResponse({ status: true, message: 'Verification approved' });
     }
@@ -887,11 +888,30 @@ async function handleAction(request: NextRequest, action: string, method: string
     });
   }
 
-  // 19. Pages: updatePrivacy, updateTerms
+  // 19. Pages: viewPrivacy, viewTerms, updatePrivacy, updateTerms
+  if (action === 'viewPrivacy') {
+    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: p,
+    });
+  }
+
+  if (action === 'viewTerms') {
+    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: p,
+    });
+  }
+
   if (action === 'updatePrivacy') {
     const p = db.pages[0];
     if (p) {
       p.privacy = fields.privacy || p.privacy;
+      if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
       await commitDb(db);
       return jsonResponse({ status: true, message: 'Privacy policy updated' });
     }
@@ -901,6 +921,7 @@ async function handleAction(request: NextRequest, action: string, method: string
     const p = db.pages[0];
     if (p) {
       p.termsofuse = fields.termsofuse || p.termsofuse;
+      if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
       await commitDb(db);
       return jsonResponse({ status: true, message: 'Terms of use updated' });
     }

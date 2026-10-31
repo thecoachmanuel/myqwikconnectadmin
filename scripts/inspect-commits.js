@@ -15,3 +15,4 @@ lines.forEach((line, idx) => {
 
 console.log('Unawaited commitDb count:', unawaitedCommitLines.length);
 unawaitedCommitLines.forEach(l => console.log(`  L${l.lineNum}: ${l.line}`));
+

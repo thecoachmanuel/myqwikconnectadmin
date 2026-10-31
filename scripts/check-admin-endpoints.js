@@ -34,3 +34,4 @@ for (const ep of endpoints) {
 console.log('Total admin fetch endpoints:', endpoints.size);
 console.log('Endpoints:', [...endpoints]);
 console.log('Missing in [action]/route.ts:', missingInAction);
+
