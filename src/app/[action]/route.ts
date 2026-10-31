@@ -1044,9 +1044,9 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   if (action === 'generateAgoraToken') {
-    const channelName = fields.channelName || 'orange_live';
+    const channelName = fields.channelName || fields.channel_name || 'orange_live';
     const uid = fields.uid ? parseInt(fields.uid) : 0;
-    const appId = process.env.AGORA_APP_ID || '';
+    const appId = process.env.AGORA_APP_ID || 'b07fffcaca5c4c67a4f00bd2924d7c52';
     const appCertificate = process.env.AGORA_APP_CERT || process.env.AGORA_APP_CERTIFICATE || '';
 
     if (appId && appCertificate) {
@@ -1070,17 +1070,20 @@ async function handleAction(request: NextRequest, action: string, method: string
           status: true,
           message: 'generated successfully',
           token,
+          app_id: appId,
         });
       } catch (err: any) {
         console.error('Agora token build error:', err);
       }
     }
 
-    const mockToken = `AGORA_TOKEN_${channelName}_${Date.now()}`;
+    // In Agora App ID mode (without App Certificate), token must be empty string ("")
+    // Passing a dummy string causes Agora RTC SDK to reject connection with token error
     return jsonResponse({
       status: true,
       message: 'generated successfully',
-      token: mockToken,
+      token: '',
+      app_id: appId,
     });
   }
 
