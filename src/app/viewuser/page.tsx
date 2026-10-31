@@ -3,6 +3,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { getImageUrl } from '@/lib/image-helper';
 
 function ViewUserContent() {
   const searchParams = useSearchParams();
@@ -202,11 +203,7 @@ function ViewUserContent() {
           <div className="form-row d-flex flex-wrap mb-3">
             {user.images && user.images.length > 0 ? (
               user.images.map((img: any) => {
-                const src = img.image.startsWith('http')
-                  ? img.image
-                  : img.image.startsWith('/')
-                  ? img.image
-                  : `/${img.image}`;
+                const src = getImageUrl(img.image);
                 return (
                   <div key={img.id} className="position-relative mr-3 mb-2">
                     <img

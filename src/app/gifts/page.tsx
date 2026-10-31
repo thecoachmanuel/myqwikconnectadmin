@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function GiftsPage() {
   const [gifts, setGifts] = useState<any[]>([]);
@@ -146,11 +147,7 @@ export default function GiftsPage() {
                   </tr>
                 ) : (
                   filteredGifts.map((g) => {
-                    const src = g.image.startsWith('http')
-                      ? g.image
-                      : g.image.startsWith('/')
-                      ? g.image
-                      : `/${g.image}`;
+                    const src = getImageUrl(g.image);
                     return (
                       <tr key={g.id}>
                         <td>
@@ -282,13 +279,7 @@ export default function GiftsPage() {
                       height={120}
                       width={120}
                       className="rounded"
-                      src={
-                        editingGift.image?.startsWith('http')
-                          ? editingGift.image
-                          : editingGift.image?.startsWith('/')
-                          ? editingGift.image
-                          : `/${editingGift.image}`
-                      }
+                      src={getImageUrl(editingGift.image)}
                       alt=""
                     />
                   </div>

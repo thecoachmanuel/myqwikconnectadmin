@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function ViewStoriesPage() {
   const [stories, setStories] = useState<any[]>([]);
@@ -106,11 +107,7 @@ export default function ViewStoriesPage() {
                   </tr>
                 ) : (
                   filteredStories.map((s) => {
-                    const src = s.content?.startsWith('http')
-                      ? s.content
-                      : s.content?.startsWith('/')
-                      ? s.content
-                      : `/${s.content}`;
+                    const src = getImageUrl(s.content);
 
                     return (
                       <tr key={s.id}>
@@ -184,13 +181,7 @@ export default function ViewStoriesPage() {
                 <div className="form-group position-relative m-0">
                   <label className="form-label d-block text-left mb-2">Story Media</label>
                   <img
-                    src={
-                      viewingStory.content?.startsWith('http')
-                        ? viewingStory.content
-                        : viewingStory.content?.startsWith('/')
-                        ? viewingStory.content
-                        : `/${viewingStory.content}`
-                    }
+                    src={getImageUrl(viewingStory.content)}
                     alt="Story"
                     className="img-fluid rounded"
                     style={{ maxHeight: '65vh', objectFit: 'contain' }}

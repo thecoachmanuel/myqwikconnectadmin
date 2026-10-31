@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function RedeemRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -157,11 +158,7 @@ export default function RedeemRequestsPage() {
                       r.user?.images && r.user.images[0]?.image
                         ? r.user.images[0].image
                         : '/asset/img/user.png';
-                    const avatarSrc = avatar.startsWith('http')
-                      ? avatar
-                      : avatar.startsWith('/')
-                      ? avatar
-                      : `/${avatar}`;
+                    const avatarSrc = getImageUrl(avatar);
 
                     return (
                       <tr key={r.id}>

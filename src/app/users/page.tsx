@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import Link from 'next/link';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -193,11 +194,7 @@ export default function UsersPage() {
                       u.images && u.images[0]?.image
                         ? u.images[0].image
                         : '/asset/img/user.png';
-                    const avatarSrc = avatar.startsWith('http')
-                      ? avatar
-                      : avatar.startsWith('/')
-                      ? avatar
-                      : `/${avatar}`;
+                    const avatarSrc = getImageUrl(avatar);
 
                     return (
                       <tr key={u.id}>

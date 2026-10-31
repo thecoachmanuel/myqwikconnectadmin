@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function OnboardingPage() {
   const [screens, setScreens] = useState<any[]>([]);
@@ -157,11 +158,7 @@ export default function OnboardingPage() {
                   </tr>
                 ) : (
                   filteredScreens.map((s, idx) => {
-                    const src = s.image?.startsWith('http')
-                      ? s.image
-                      : s.image?.startsWith('/')
-                      ? s.image
-                      : `/${s.image}`;
+                    const src = getImageUrl(s.image);
 
                     return (
                       <tr key={s.id}>

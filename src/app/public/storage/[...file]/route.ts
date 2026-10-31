@@ -22,6 +22,8 @@ export async function GET(
     path.join(process.cwd(), 'public', 'storage', filePath),
     path.join(process.cwd(), 'public', 'storage', 'uploads', filePath),
     path.join(process.cwd(), 'public', 'storage', 'uploads', path.basename(filePath)),
+    path.join(process.cwd(), 'public', 'uploads', filePath),
+    path.join(process.cwd(), 'public', 'uploads', path.basename(filePath)),
     path.join(process.cwd(), 'public', filePath),
     path.join(process.cwd(), 'public', 'asset', filePath),
   ];

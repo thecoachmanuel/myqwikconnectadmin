@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function LiveHistoryPage() {
   const [history, setHistory] = useState<any[]>([]);
@@ -91,11 +92,7 @@ export default function LiveHistoryPage() {
                       h.user?.images && h.user.images[0]?.image
                         ? h.user.images[0].image
                         : '/asset/img/user.png';
-                    const avatarSrc = avatar.startsWith('http')
-                      ? avatar
-                      : avatar.startsWith('/')
-                      ? avatar
-                      : `/${avatar}`;
+                    const avatarSrc = getImageUrl(avatar);
 
                     return (
                       <tr key={h.id}>

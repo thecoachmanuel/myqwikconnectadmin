@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function PostsPage() {
   const [posts, setPosts] = useState<any[]>([]);
@@ -112,11 +113,7 @@ export default function PostsPage() {
                         : p.content && p.content[0]?.content
                         ? p.content[0].content
                         : '/asset/img/user.png';
-                    const contentSrc = firstContent.startsWith('http')
-                      ? firstContent
-                      : firstContent.startsWith('/')
-                      ? firstContent
-                      : `/${firstContent}`;
+                    const contentSrc = getImageUrl(firstContent);
 
                     return (
                       <tr key={p.id}>
@@ -195,11 +192,7 @@ export default function PostsPage() {
                   <label className="font-weight-bold mb-2">Post Content</label>
                   <div className="d-flex flex-wrap gap-2">
                     {((viewingPost.contents || viewingPost.content) || []).map((c: any, idx: number) => {
-                      const src = c.content.startsWith('http')
-                        ? c.content
-                        : c.content.startsWith('/')
-                        ? c.content
-                        : `/${c.content}`;
+                      const src = getImageUrl(c.content);
                       return (
                         <img
                           key={idx}

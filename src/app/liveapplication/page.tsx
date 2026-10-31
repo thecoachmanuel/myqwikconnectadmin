@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import Link from 'next/link';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function LiveApplicationPage() {
   const [apps, setApps] = useState<any[]>([]);
@@ -107,11 +108,7 @@ export default function LiveApplicationPage() {
                       app.user?.images && app.user.images[0]?.image
                         ? app.user.images[0].image
                         : '/asset/img/user.png';
-                    const avatarSrc = avatar.startsWith('http')
-                      ? avatar
-                      : avatar.startsWith('/')
-                      ? avatar
-                      : `/${avatar}`;
+                    const avatarSrc = getImageUrl(avatar);
 
                     return (
                       <tr key={app.id}>

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import { getImageUrl } from '@/lib/image-helper';
 
 export default function VerificationRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -122,27 +123,10 @@ export default function VerificationRequestsPage() {
                       v.user?.images && v.user.images[0]?.image
                         ? v.user.images[0].image
                         : '/asset/img/user.png';
-                    const avatarSrc = avatar.startsWith('http')
-                      ? avatar
-                      : avatar.startsWith('/')
-                      ? avatar
-                      : `/${avatar}`;
+                    const avatarSrc = getImageUrl(avatar);
 
-                    const selfieSrc = v.selfie
-                      ? v.selfie.startsWith('http')
-                        ? v.selfie
-                        : v.selfie.startsWith('/')
-                        ? v.selfie
-                        : `/${v.selfie}`
-                      : '/asset/img/user.png';
-
-                    const docSrc = v.document
-                      ? v.document.startsWith('http')
-                        ? v.document
-                        : v.document.startsWith('/')
-                        ? v.document
-                        : `/${v.document}`
-                      : '/asset/img/user.png';
+                    const selfieSrc = getImageUrl(v.selfie);
+                    const docSrc = getImageUrl(v.document);
 
                     return (
                       <tr key={v.id}>

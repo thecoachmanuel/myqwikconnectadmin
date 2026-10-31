@@ -50,8 +50,12 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
     try {
       const formData = await request.formData();
       const uploadDir = path.join(process.cwd(), 'public', 'storage', 'uploads');
+      const directUploadDir = path.join(process.cwd(), 'public', 'uploads');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      if (!fs.existsSync(directUploadDir)) {
+        fs.mkdirSync(directUploadDir, { recursive: true });
       }
 
       for (const [key, value] of formData.entries()) {
@@ -63,6 +67,9 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
             const arrayBuffer = await value.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
             fs.writeFileSync(targetPath, buffer);
+            try {
+              fs.writeFileSync(path.join(directUploadDir, uniqueName), buffer);
+            } catch {}
 
             const relPath = `uploads/${uniqueName}`;
             files.push({
