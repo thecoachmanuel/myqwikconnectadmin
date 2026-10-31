@@ -61,6 +61,7 @@ export interface User {
   bio: string;
   about: string;
   lattitude: string;
+  latitude?: string;
   longitude: string;
   login_type: number;
   device_token: string;
@@ -88,6 +89,7 @@ export interface User {
   religion_key: number;
   language_keys: string;
   dob: string;
+  age?: number;
   hidden_user_ids: string;
   app_language: string;
   created_at: string;

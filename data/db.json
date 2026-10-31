@@ -51,7 +51,7 @@
     {
       "id": 1,
       "is_block": 0,
-      "gender": 1,
+      "gender": "1",
       "savedprofile": "",
       "likedprofile": "2,3",
       "interests": "1,2,3",
@@ -61,9 +61,9 @@
       "instagram": "alexwright",
       "youtube": "",
       "facebook": "",
-      "country": "United States",
+      "country": "United States Minor Outlying Islands",
       "state": "California",
-      "city": "Los Angeles",
+      "city": "Cankuzo",
       "bio": "Ready to connect and discover wonderful souls.",
       "about": "Passionate about travel, photography, and good music.",
       "lattitude": "7.3782",
@@ -86,23 +86,33 @@
       "password": "123456",
       "following": 12,
       "followers": 48,
-      "gender_preferred": 2,
+      "gender_preferred": "1",
       "age_preferred_min": 18,
       "age_preferred_max": 35,
       "distance_preference": 50,
-      "relationship_goal_id": 1,
-      "religion_key": 1,
-      "language_keys": "1",
+      "relationship_goal_id": "1",
+      "religion_key": "Christian",
+      "language_keys": "English",
       "dob": "1998-05-15",
       "hidden_user_ids": "",
       "app_language": "en",
       "created_at": "2026-10-31T09:32:07.686Z",
-      "updated_at": "2026-10-31T14:43:30.951Z",
+      "updated_at": "2026-10-31T17:35:48.405Z",
       "images": [
         {
           "id": 1,
           "user_id": 1,
           "image": "uploads/user1.jpg"
+        },
+        {
+          "id": 5,
+          "user_id": 1,
+          "image": "uploads/1793468122468_iml4cqv.jpg"
+        },
+        {
+          "id": 6,
+          "user_id": 1,
+          "image": "uploads/1793468139373_ebnfjv0.jpg"
         }
       ]
     },
@@ -301,6 +311,16 @@
       "id": 4,
       "user_id": 4,
       "image": "uploads/user4.jpg"
+    },
+    {
+      "id": 5,
+      "user_id": 1,
+      "image": "uploads/1793468122468_iml4cqv.jpg"
+    },
+    {
+      "id": 6,
+      "user_id": 1,
+      "image": "uploads/1793468139373_ebnfjv0.jpg"
     }
   ],
   "interests": [

@@ -221,10 +221,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     // Compute is_like matching PHP (boolean)
     let isLike = false;
+    let isSaved = false;
     if (myUserId > 0) {
-      isLike = (db.liked_profiles || []).some(
-        (lp) => lp.my_user_id === myUserId && lp.user_id === user.id
-      );
+      const myUser = db.users.find((u) => u.id === myUserId);
+      const csvLikes = (myUser?.likedprofile || '').split(',').map((s) => s.trim());
+      const csvSaved = (myUser?.savedprofile || '').split(',').map((s) => s.trim());
+      isLike =
+        csvLikes.includes(user.id.toString()) ||
+        (db.liked_profiles || []).some(
+          (lp) => lp.my_user_id === myUserId && lp.user_id === user.id
+        );
+      isSaved = csvSaved.includes(user.id.toString());
     }
 
     const userData = {
@@ -234,6 +241,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       stories: userStories,
       followingStatus: followingStatus,
       is_like: isLike,
+      is_saved: isSaved,
     };
 
     return jsonResponse({
@@ -349,16 +357,13 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     if (reqGender === 1 || reqGender === 2) {
-      const byGender = list.filter((u) => u.gender === reqGender);
-      if (byGender.length > 0) {
-        list = byGender;
-      }
+      list = list.filter((u) => Number(u.gender) === reqGender);
     }
 
     if (list.length === 0) {
       return jsonResponse({
         status: false,
-        message: 'No profile found',
+        message: 'No profiles found matching selected gender',
         data: null,
       });
     }
@@ -369,13 +374,20 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       userImgs = [{ id: picked.id * 10, user_id: picked.id, image: 'uploads/user1.jpg' }];
     }
 
+    const myUser = db.users.find((u) => u.id === currentUserId);
+    const csvLikes = (myUser?.likedprofile || '').split(',').map((s) => s.trim());
+    const csvSaved = (myUser?.savedprofile || '').split(',').map((s) => s.trim());
+
     const randomUserData = {
       ...picked,
       religion_key: String(picked.religion_key || ''),
       images: userImgs,
-      is_like: (db.liked_profiles || []).some(
-        (lp) => lp.my_user_id === currentUserId && lp.user_id === picked.id
-      ),
+      is_like:
+        csvLikes.includes(picked.id.toString()) ||
+        (db.liked_profiles || []).some(
+          (lp) => lp.my_user_id === currentUserId && lp.user_id === picked.id
+        ),
+      is_saved: csvSaved.includes(picked.id.toString()),
     };
 
     return jsonResponse({
@@ -446,29 +458,62 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 7b. filteredProfiles (Tinder search with granular criteria)
   if (endpoint === 'filteredProfiles') {
     const currentUserId = parseInt(fields.my_user_id || fields.user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
     const appdata = db.appdata[0];
     const start = parseInt(fields.start) || 0;
     const limit = parseInt(fields.limit) || 20;
 
-    let list = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0);
+    const blockedIds = (currentUser?.blocked_users || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+    const hiddenIds = (currentUser?.hidden_user_ids || '')
+      .split(',')
+      .map((id) => parseInt(id.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    let list = db.users.filter(
+      (u) =>
+        u.id !== currentUserId &&
+        u.is_block === 0 &&
+        !blockedIds.includes(u.id) &&
+        !hiddenIds.includes(u.id)
+    );
 
     if (appdata && appdata.include_fake_user_in_matching === 0) {
       list = list.filter((u) => !u.is_fake);
     }
 
-    // Gender filter
-    if (fields.gender !== undefined) {
+    // Gender filter (1 = male, 2 = female, 3 = both)
+    if (fields.gender !== undefined && fields.gender !== '') {
       const g = parseInt(fields.gender);
       if (g === 1 || g === 2) {
-        list = list.filter((u) => u.gender === g);
+        list = list.filter((u) => Number(u.gender) === g);
       }
+    }
+
+    // Age filter
+    const minAge = parseInt(fields.age_preferred_min || fields.min_age || '0');
+    const maxAge = parseInt(fields.age_preferred_max || fields.max_age || '100');
+    if (minAge > 0 || maxAge < 100) {
+      list = list.filter((u) => {
+        let age = parseInt((u as any).age?.toString() || '0');
+        if (!age && u.dob) {
+          const birthYear = new Date(u.dob).getFullYear();
+          if (!isNaN(birthYear)) {
+            age = new Date().getFullYear() - birthYear;
+          }
+        }
+        if (!age) return true;
+        return age >= minAge && age <= maxAge;
+      });
     }
 
     // Relationship goal
     if (fields.relationship_goal_id !== undefined && fields.relationship_goal_id !== '') {
       const goalId = parseInt(fields.relationship_goal_id);
       if (goalId > 0) {
-        list = list.filter((u) => u.relationship_goal_id === goalId);
+        list = list.filter((u) => Number(u.relationship_goal_id) === goalId);
       }
     }
 
@@ -499,9 +544,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       if (filtered.length > 0) list = filtered;
     }
 
-    if (list.length === 0) {
-      list = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0);
-    }
+    const csvLikes = (currentUser?.likedprofile || '').split(',').map((s) => s.trim());
+    const csvSaved = (currentUser?.savedprofile || '').split(',').map((s) => s.trim());
 
     const paged = list.slice(start, start + limit);
     const result = paged.map((u) => {
@@ -513,9 +557,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         ...u,
         religion_key: String(u.religion_key || ''),
         images: userImgs,
-        is_like: (db.liked_profiles || []).some(
-          (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
-        ),
+        is_like:
+          csvLikes.includes(u.id.toString()) ||
+          (db.liked_profiles || []).some(
+            (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
+          ),
+        is_saved: csvSaved.includes(u.id.toString()),
       };
     });
 
@@ -526,8 +573,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 7c. fetchUsersByCordinates (Explore on Map)
-  if (endpoint === 'fetchUsersByCordinates') {
+  // 7c. fetchUsersByCordinates / fetchUsersByCoordinates (Explore on Map)
+  if (endpoint === 'fetchUsersByCordinates' || endpoint === 'fetchUsersByCoordinates') {
     const lat = parseFloat(fields.lat || fields.latitude);
     const lon = parseFloat(fields.long || fields.longitude);
     const km = parseFloat(fields.km) || 500;
@@ -548,7 +595,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     if (!isNaN(lat) && !isNaN(lon)) {
       const nearby = users.filter((u) => {
-        const uLat = parseFloat(u.lattitude || '0');
+        const uLat = parseFloat(u.lattitude || u.latitude || '0');
         const uLon = parseFloat(u.longitude || '0');
         if (isNaN(uLat) || isNaN(uLon) || (uLat === 0 && uLon === 0)) return false;
         return getDistanceKm(lat, lon, uLat, uLon) <= km;
@@ -558,13 +605,23 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
     }
 
-    const list = users.map((u) => {
+    const list = users.map((u, idx) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
       if (userImgs.length === 0) {
         userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
       }
+      const rawLat = parseFloat(u.lattitude || u.latitude || '0');
+      const rawLon = parseFloat(u.longitude || '0');
+      const baseLat = !isNaN(lat) && lat !== 0 ? lat : 21.2408;
+      const baseLon = !isNaN(lon) && lon !== 0 ? lon : 72.8806;
+      const assignedLat = rawLat !== 0 ? rawLat.toString() : (baseLat + (idx % 2 === 0 ? 1 : -1) * 0.005 * (idx + 1)).toFixed(6);
+      const assignedLon = rawLon !== 0 ? rawLon.toString() : (baseLon + (idx % 3 === 0 ? 1 : -1) * 0.005 * (idx + 1)).toFixed(6);
+
       return {
         ...u,
+        latitude: assignedLat,
+        lattitude: assignedLat,
+        longitude: assignedLon,
         religion_key: String(u.religion_key || ''),
         images: userImgs,
       };
@@ -592,9 +649,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const allLikedIds = Array.from(new Set([...likedIds, ...fromLikedProfiles]));
     let likedList = db.users.filter((u) => allLikedIds.includes(u.id));
-    if (likedList.length === 0) {
-      likedList = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0).slice(0, 5);
-    }
 
     const data = likedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
@@ -621,9 +675,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       .filter((id) => !isNaN(id) && id > 0);
 
     let savedList = db.users.filter((u) => savedIds.includes(u.id));
-    if (savedList.length === 0) {
-      savedList = db.users.filter((u) => u.id !== currentUserId && u.is_block === 0).slice(0, 5);
-    }
 
     const data = savedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
@@ -741,8 +792,18 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 9c. updateLikedProfile
   if (endpoint === 'updateLikedProfile') {
-    const myUserId = parseInt(fields.my_user_id || fields.user_id);
-    const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
+    let myUserId = 0;
+    let targetUserId = 0;
+    if (fields.my_user_id) {
+      myUserId = parseInt(fields.my_user_id);
+      targetUserId = parseInt(fields.user_id || fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else if (fields.profile_user_id || fields.target_user_id || fields.profile_id) {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = parseInt(fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = 0;
+    }
     const user = db.users.find((u) => u.id === myUserId);
 
     let isLike = false;
@@ -787,8 +848,18 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 9d. likedProfile
   if (endpoint === 'likedProfile') {
-    const myUserId = parseInt(fields.my_user_id || fields.user_id);
-    const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
+    let myUserId = 0;
+    let targetUserId = 0;
+    if (fields.my_user_id) {
+      myUserId = parseInt(fields.my_user_id);
+      targetUserId = parseInt(fields.user_id || fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else if (fields.profile_user_id || fields.target_user_id || fields.profile_id) {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = parseInt(fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = 0;
+    }
 
     if (myUserId && targetUserId) {
       const exists = (db.liked_profiles || []).find(
@@ -827,8 +898,18 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 9e. dislikedProfile
   if (endpoint === 'dislikedProfile') {
-    const myUserId = parseInt(fields.my_user_id || fields.user_id);
-    const targetUserId = parseInt(fields.user_id || fields.profile_user_id);
+    let myUserId = 0;
+    let targetUserId = 0;
+    if (fields.my_user_id) {
+      myUserId = parseInt(fields.my_user_id);
+      targetUserId = parseInt(fields.user_id || fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else if (fields.profile_user_id || fields.target_user_id || fields.profile_id) {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = parseInt(fields.profile_user_id || fields.target_user_id || fields.profile_id || 0);
+    } else {
+      myUserId = parseInt(fields.user_id || 0);
+      targetUserId = 0;
+    }
 
     if (myUserId && targetUserId) {
       const idx = (db.liked_profiles || []).findIndex(
@@ -1122,6 +1203,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   if (endpoint === 'searchUsers' || endpoint === 'searchUsersForInterest') {
     const keyword = (fields.keyword || fields.search || '').toString().toLowerCase();
     const interestId = fields.interest_id?.toString();
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const csvLikes = (currentUser?.likedprofile || '').split(',').map((s) => s.trim());
+    const csvSaved = (currentUser?.savedprofile || '').split(',').map((s) => s.trim());
 
     let list = db.users.filter((u) => u.is_block === 0);
 
@@ -1138,10 +1223,23 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       list = list.filter((u) => u.interests && u.interests.split(',').includes(interestId));
     }
 
-    const data = list.map((u) => ({
-      ...u,
-      images: db.images.filter((img) => img.user_id === u.id),
-    }));
+    const data = list.map((u) => {
+      let userImgs = db.images.filter((img) => img.user_id === u.id);
+      if (userImgs.length === 0) {
+        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+      }
+      return {
+        ...u,
+        religion_key: String(u.religion_key || ''),
+        images: userImgs,
+        is_like:
+          csvLikes.includes(u.id.toString()) ||
+          (db.liked_profiles || []).some(
+            (lp) => lp.my_user_id === currentUserId && lp.user_id === u.id
+          ),
+        is_saved: csvSaved.includes(u.id.toString()),
+      };
+    });
 
     return jsonResponse({
       status: true,

@@ -49,13 +49,19 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
   if (contentType.includes('multipart/form-data') || contentType.includes('application/x-www-form-urlencoded')) {
     try {
       const formData = await request.formData();
+      let isFsWritable = false;
       const uploadDir = path.join(process.cwd(), 'public', 'storage', 'uploads');
       const directUploadDir = path.join(process.cwd(), 'public', 'uploads');
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      if (!fs.existsSync(directUploadDir)) {
-        fs.mkdirSync(directUploadDir, { recursive: true });
+      try {
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        if (!fs.existsSync(directUploadDir)) {
+          fs.mkdirSync(directUploadDir, { recursive: true });
+        }
+        isFsWritable = true;
+      } catch {
+        isFsWritable = false;
       }
 
       for (const [key, value] of formData.entries()) {
@@ -63,15 +69,36 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
           if (value.size > 0 && value.name) {
             const ext = path.extname(value.name) || '.jpg';
             const uniqueName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
-            const targetPath = path.join(uploadDir, uniqueName);
             const arrayBuffer = await value.arrayBuffer();
             const buffer = Buffer.from(arrayBuffer);
-            fs.writeFileSync(targetPath, buffer);
-            try {
-              fs.writeFileSync(path.join(directUploadDir, uniqueName), buffer);
-            } catch {}
 
-            const relPath = `uploads/${uniqueName}`;
+            let targetPath = '';
+            let relPath = `uploads/${uniqueName}`;
+
+            if (isFsWritable) {
+              try {
+                targetPath = path.join(uploadDir, uniqueName);
+                fs.writeFileSync(targetPath, buffer);
+                try {
+                  fs.writeFileSync(path.join(directUploadDir, uniqueName), buffer);
+                } catch {}
+              } catch {
+                isFsWritable = false;
+              }
+            }
+
+            if (!isFsWritable) {
+              try {
+                targetPath = path.join('/tmp', uniqueName);
+                fs.writeFileSync(targetPath, buffer);
+              } catch {}
+            }
+
+            const mimeType = value.type || (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.mp4' ? 'video/mp4' : 'image/jpeg');
+            if (process.env.VERCEL || !isFsWritable || buffer.length <= 4 * 1024 * 1024) {
+              relPath = `data:${mimeType};base64,${buffer.toString('base64')}`;
+            }
+
             files.push({
               fieldname: key,
               filename: uniqueName,
