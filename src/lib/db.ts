@@ -599,7 +599,7 @@ export async function getDb(): Promise<DatabaseData> {
 
             // Also seed key collections for direct Atlas management
             const syncCols = [
-              'users', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
+              'users', 'images', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
               'interests', 'package', 'diamond_packs', 'reports',
               'verification_request', 'live_application', 'live_history',
               'redeem_requests', 'onboarding_screens', 'pages', 'languages',
@@ -659,7 +659,7 @@ export async function commitDb(updated?: DatabaseData): Promise<void> {
 
         // Mirror key collections to MongoDB for direct MongoDB queries & management
         const syncCols = [
-          'users', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
+          'users', 'images', 'gifts', 'posts', 'stories', 'admin_user', 'appdata',
           'interests', 'package', 'diamond_packs', 'reports',
           'verification_request', 'live_application', 'live_history',
           'redeem_requests', 'languages', 'religions', 'relationship_goals',
