@@ -1899,6 +1899,47 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // 34. Legal Pages (viewPrivacy, viewTerms, updatePrivacy, updateTerms)
+  if (endpoint === 'viewPrivacy') {
+    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: p,
+    });
+  }
+
+  if (endpoint === 'viewTerms') {
+    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: p,
+    });
+  }
+
+  if (endpoint === 'updatePrivacy') {
+    const p = db.pages[0];
+    if (p) {
+      p.privacy = fields.privacy || p.privacy;
+      if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Privacy policy updated' });
+    }
+    return jsonResponse({ status: false, message: 'Pages not found' });
+  }
+
+  if (endpoint === 'updateTerms') {
+    const p = db.pages[0];
+    if (p) {
+      p.termsofuse = fields.termsofuse || p.termsofuse;
+      if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
+      await commitDb(db);
+      return jsonResponse({ status: true, message: 'Terms of use updated' });
+    }
+    return jsonResponse({ status: false, message: 'Pages not found' });
+  }
+
   // Default fallback for any unhandled /api/... routes
   return jsonResponse({
     status: true,

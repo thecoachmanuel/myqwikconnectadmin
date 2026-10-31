@@ -8,16 +8,12 @@ export default function ViewTermsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/getSettingData')
+    fetch('/api/viewTerms')
       .then((r) => r.json())
-      .then(() => {
-        fetch('/viewTerms')
-          .then((r) => r.json())
-          .then((d) => {
-            if (d.data?.termsofuse) setTerms(d.data.termsofuse);
-          })
-          .catch(() => {});
-      });
+      .then((d) => {
+        if (d.data?.termsofuse) setTerms(d.data.termsofuse);
+      })
+      .catch(() => {});
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {

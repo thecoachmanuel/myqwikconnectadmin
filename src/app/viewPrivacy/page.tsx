@@ -8,16 +8,12 @@ export default function ViewPrivacyPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/getSettingData')
+    fetch('/api/viewPrivacy')
       .then((r) => r.json())
-      .then(() => {
-        fetch('/viewPrivacy')
-          .then((r) => r.json())
-          .then((d) => {
-            if (d.data?.privacy) setPrivacy(d.data.privacy);
-          })
-          .catch(() => {});
-      });
+      .then((d) => {
+        if (d.data?.privacy) setPrivacy(d.data.privacy);
+      })
+      .catch(() => {});
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {

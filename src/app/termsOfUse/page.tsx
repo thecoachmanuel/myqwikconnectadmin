@@ -1,25 +1,19 @@
-'use client';
+import React from 'react';
+import { getDb } from '@/lib/db';
 
-import React, { useEffect, useState } from 'react';
+export const dynamic = 'force-dynamic';
 
-export default function TermsOfUsePage() {
-  const [content, setContent] = useState('');
-
-  useEffect(() => {
-    fetch('/viewTerms')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.data?.termsofuse) setContent(d.data.termsofuse);
-      })
-      .catch(() => {});
-  }, []);
+export default async function TermsOfUsePage() {
+  const db = await getDb();
+  const page = db.pages[0];
+  const content = page?.termsofuse || (db.appdata[0] as any)?.termsofuse || '';
 
   return (
-    <div style={{ maxWidth: '900px', margin: '40px auto', padding: '0 20px', fontFamily: 'sans-serif' }}>
-      <h2>Terms Of Use</h2>
-      <hr />
+    <div style={{ maxWidth: '850px', margin: '40px auto', padding: '0 24px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif', color: '#2d3748', lineHeight: '1.7' }}>
+      <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', color: '#1a202c' }}>Terms of Use</h1>
+      <p style={{ color: '#718096', fontSize: '14px', marginBottom: '24px' }}>Last updated: October 2026</p>
+      <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', marginBottom: '32px' }} />
       <div dangerouslySetInnerHTML={{ __html: content || '<p>No terms of use set yet.</p>' }} />
     </div>
   );
 }
-
