@@ -70,10 +70,14 @@ export async function uploadToCloudinaryIfConfigured(
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
       method: 'POST',
       body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     const result = await res.json();
     if (result && (result.secure_url || result.url)) {
       return result.secure_url || result.url;
