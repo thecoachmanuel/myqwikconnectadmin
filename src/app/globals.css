@@ -23,3 +23,44 @@ body {
   color: white !important;
 }
 
+/* Ensure Admin Sidebar is smoothly scrollable on all viewports */
+.main-sidebar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  width: 250px !important;
+  overflow: hidden !important;
+  z-index: 880 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#sidebar-wrapper {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-bottom: 90px !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#sidebar-wrapper::-webkit-scrollbar {
+  width: 5px;
+}
+
+#sidebar-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidebar-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(255, 111, 67, 0.35);
+  border-radius: 4px;
+}
+
+#sidebar-wrapper::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 111, 67, 0.75);
+}
+
+

@@ -177,8 +177,21 @@ export default function AdminLayout({
           </ul>
         </nav>
 
-        <div className="main-sidebar sidebar-style-2">
-          <aside id="sidebar-wrapper">
+        <div
+          className="main-sidebar sidebar-style-2"
+          style={{ height: '100vh', maxHeight: '100vh', overflow: 'hidden' }}
+        >
+          <aside
+            id="sidebar-wrapper"
+            style={{
+              height: '100vh',
+              maxHeight: '100vh',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingBottom: '90px',
+              WebkitOverflowScrolling: 'touch',
+            }}
+          >
             <div className="sidebar-brand">
               <Link href="/index">
                 <span className="logo-name">{appName}</span>
