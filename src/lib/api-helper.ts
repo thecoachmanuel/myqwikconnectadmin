@@ -84,6 +84,73 @@ export async function uploadToCloudinaryIfConfigured(
   return null;
 }
 
+export async function deleteFromCloudinary(urlOrPath: string): Promise<boolean> {
+  if (!urlOrPath) return false;
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    try {
+      const db = await getDb();
+      const appdata = db.appdata?.[0];
+      cloudName = cloudName || appdata?.cloudinary_cloud_name;
+      apiKey = apiKey || appdata?.cloudinary_api_key;
+      apiSecret = apiSecret || appdata?.cloudinary_api_secret;
+    } catch (_) {}
+  }
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return false;
+  }
+
+  try {
+    let publicId = urlOrPath;
+    let resourceType = 'image';
+    if (urlOrPath.includes('/video/') || urlOrPath.endsWith('.mp4') || urlOrPath.endsWith('.mov')) {
+      resourceType = 'video';
+    }
+
+    if (urlOrPath.includes('cloudinary.com')) {
+      const uploadIdx = urlOrPath.indexOf('/upload/');
+      if (uploadIdx !== -1) {
+        let afterUpload = urlOrPath.substring(uploadIdx + '/upload/'.length);
+        if (afterUpload.match(/^v\d+\//)) {
+          afterUpload = afterUpload.replace(/^v\d+\//, '');
+        }
+        const dotIdx = afterUpload.lastIndexOf('.');
+        if (dotIdx !== -1) {
+          afterUpload = afterUpload.substring(0, dotIdx);
+        }
+        publicId = afterUpload;
+      }
+    }
+
+    if (!publicId) return false;
+
+    const crypto = await import('crypto');
+    const timestamp = Math.floor(Date.now() / 1000);
+    const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+    const formData = new FormData();
+    formData.append('public_id', publicId);
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('signature', signature);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/destroy`, {
+      method: 'POST',
+      body: formData,
+    });
+    const result = await res.json();
+    return result && result.result === 'ok';
+  } catch (err) {
+    console.error('Cloudinary destroy error:', err);
+    return false;
+  }
+}
+
 export async function parseRequestBody(request: Request): Promise<{ fields: Record<string, any>; files: { fieldname: string; filename: string; path: string; url: string }[] }> {
   const contentType = request.headers.get('content-type') || '';
   const fields: Record<string, any> = {};

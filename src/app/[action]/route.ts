@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getDb, commitDb, getNextId } from '@/lib/db';
-import { corsHeaders, handleCors, jsonResponse, parseRequestBody } from '@/lib/api-helper';
+import { corsHeaders, handleCors, jsonResponse, parseRequestBody, deleteFromCloudinary } from '@/lib/api-helper';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 export async function OPTIONS() {
@@ -339,6 +339,15 @@ async function handleAction(request: NextRequest, action: string, method: string
 
   if (action === 'deletePostFromUserPostTable' || action === 'deletePost') {
     const id = parseInt(fields.id || fields.post_id);
+    const contentsToDelete = (db.post_contents || []).filter((c) => c.post_id === id);
+    for (const c of contentsToDelete) {
+      if (c.content) {
+        deleteFromCloudinary(c.content).catch(() => {});
+      }
+      if (c.thumbnail) {
+        deleteFromCloudinary(c.thumbnail).catch(() => {});
+      }
+    }
     db.posts = (db.posts || []).filter((p) => p.id !== id);
     db.post_contents = (db.post_contents || []).filter((c) => c.post_id !== id);
     await commitDb(db);
@@ -900,6 +909,16 @@ async function handleAction(request: NextRequest, action: string, method: string
   if (action === 'deletePostFromReport' || action === 'deletePostFromUserPostTable') {
     const postId = parseInt(fields.post_id || fields.id);
     const reportId = parseInt(fields.report_id);
+    const contentsToDelete = (db.post_contents || []).filter((c) => c.post_id === postId);
+    for (const c of contentsToDelete) {
+      if (c.content) {
+        deleteFromCloudinary(c.content).catch(() => {});
+      }
+      if (c.thumbnail) {
+        deleteFromCloudinary(c.thumbnail).catch(() => {});
+      }
+    }
+    db.post_contents = (db.post_contents || []).filter((c) => c.post_id !== postId);
     db.posts = (db.posts || []).filter((p) => p.id !== postId);
     db.comments = (db.comments || []).filter((c) => c.post_id !== postId);
     if (db.likes) db.likes = db.likes.filter((l) => l.post_id !== postId);
