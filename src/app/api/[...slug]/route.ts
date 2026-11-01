@@ -44,6 +44,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  if (endpoint === 'adminSyncSeedData' || endpoint === 'refreshSeedData') {
+    const { getDbSync } = await import('@/lib/db');
+    const freshData = getDbSync();
+    await commitDb(freshData);
+    return jsonResponse({
+      status: true,
+      message: 'Database re-seeded successfully',
+      data: freshData.appdata[0],
+    });
+  }
+
   // 1. getSettingData
   if (endpoint === 'getSettingData') {
     const appdata = db.appdata[0] || {};
