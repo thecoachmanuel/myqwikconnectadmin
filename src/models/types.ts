@@ -100,6 +100,7 @@ export interface User {
   age?: number;
   hidden_user_ids: string;
   app_language: string;
+  firebase_uid?: string;
   created_at: string;
   updated_at: string;
   images?: UserImage[];

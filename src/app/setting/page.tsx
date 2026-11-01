@@ -19,6 +19,7 @@ export default function SettingPage() {
     is_dating: 1,
     is_social_media: 1,
     include_fake_user_in_matching: 0,
+    web_mobile_view: 1,
     stream_and_gift_commission: 10,
     post_description_limit: '500',
     post_upload_image_limit: '10',
@@ -473,6 +474,32 @@ export default function SettingPage() {
                           />
                           <span className="slider round"></span>
                         </label>
+                      </div>
+                      <div className="form-group col-md-4 m-0">
+                        <label className="d-block">Desktop Web Mobile Frame View</label>
+                        <label className="switch ml-1">
+                          <input
+                            type="checkbox"
+                            name="web_mobile_view"
+                            checked={appdata.web_mobile_view !== 0}
+                            onChange={(e) => {
+                              const val = e.target.checked ? 1 : 0;
+                              setAppdata({
+                                ...appdata,
+                                web_mobile_view: val,
+                              });
+                              fetch('/updateAppdata', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ web_mobile_view: val }),
+                              }).catch(() => {});
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <small className="form-text text-muted d-block mt-1">
+                          Show mobile app viewport on desktop browsers (PWA style). Toggle off to stretch across full desktop view.
+                        </small>
                       </div>
                     </div>
                   </div>

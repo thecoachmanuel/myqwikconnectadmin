@@ -57,7 +57,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 1. getSettingData
   if (endpoint === 'getSettingData') {
-    const appdata = db.appdata[0] || {};
+    const appdata = {
+      ...(db.appdata[0] || {}),
+      privacypolicy: db.pages[0]?.privacy || (db.appdata[0] as any)?.privacypolicy || '',
+      termsofuse: db.pages[0]?.termsofuse || (db.appdata[0] as any)?.termsofuse || '',
+      web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
+    };
     const gifts = db.gifts || [];
     const interests = (db.interests || []).filter((i) => i.is_deleted === 0);
     const relationship_goals = (db.relationship_goals || []).filter((r) => r.is_deleted === 0);
@@ -87,12 +92,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const device_token = fields.device_token?.toString() || '';
     const device_type = parseInt(fields.device_type) || 1;
     const login_type = parseInt(fields.login_type) || 1;
+    const firebase_uid = fields.firebase_uid?.toString() || '';
 
     let user = db.users.find((u) => u.identity === identity);
 
     if (user) {
       user.device_token = device_token || user.device_token;
       user.device_type = device_type || user.device_type;
+      if (firebase_uid) user.firebase_uid = firebase_uid;
       user.updated_at = new Date().toISOString();
       await commitDb(db);
     } else {
@@ -114,13 +121,13 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         instagram: '',
         youtube: '',
         facebook: '',
-        country: '',
-        state: '',
-        city: '',
-        bio: '',
-        about: '',
-        lattitude: '0.0',
-        longitude: '0.0',
+        country: fields.country?.toString() || 'Nigeria',
+        state: fields.state?.toString() || 'Lagos',
+        city: fields.city?.toString() || 'Lagos',
+        bio: 'Ready to connect, share moments and meet exciting people on Orange!',
+        about: 'Passionate about culture, great music, lifestyle and genuine connections.',
+        lattitude: '6.5244',
+        longitude: '3.3792',
         login_type,
         device_token,
         blocked_users: '',
@@ -149,6 +156,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         dob: '2000-01-01',
         hidden_user_ids: '',
         app_language: 'en',
+        firebase_uid,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         images: [],
@@ -159,7 +167,15 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     // Attach user images
     const userImages = db.images.filter((img) => img.user_id === user!.id);
-    user.images = userImages;
+    if (userImages.length === 0) {
+      user.images = [{
+        id: (user!.id * 100) + 1,
+        user_id: user!.id,
+        image: 'uploads/nigerian_female_profile1.png',
+      }];
+    } else {
+      user.images = userImages;
+    }
 
     return jsonResponse({
       status: true,
@@ -1370,53 +1386,55 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       db.appdata[0]?.paystack_secret_key ||
       '';
 
-    const reference = `ORANGE_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-    if (secretKey && !secretKey.includes('test_orange_paystack')) {
-      try {
-        const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${secretKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email,
-            amount: amountKobo,
-            reference,
-            metadata: {
-              user_id: userId,
-              plan_id: planId,
-              type,
-              diamonds,
-              months,
-            },
-          }),
-        });
-        const paystackData = await paystackRes.json();
-        if (paystackData.status) {
-          return jsonResponse({
-            status: true,
-            message: 'Paystack transaction initialized',
-            data: paystackData.data,
-          });
-        }
-      } catch (err: any) {
-        console.error('Paystack initialization error:', err);
-      }
+    if (!secretKey || secretKey.trim() === '' || secretKey.includes('test_orange_paystack')) {
+      return jsonResponse({
+        status: false,
+        message: 'Paystack is not configured. Please enter your real Paystack Secret Key (sk_test_... or sk_live_...) in Admin Settings > General Settings.',
+      });
     }
 
-    // Fallback or Test checkout response
-    return jsonResponse({
-      status: true,
-      message: 'Paystack checkout ready',
-      data: {
-        authorization_url: `https://checkout.paystack.com/${reference}`,
-        access_code: `mock_code_${reference}`,
-        reference,
-        amount: amountNaira,
-      },
-    });
+    const reference = `ORANGE_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    try {
+      const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          amount: amountKobo,
+          reference,
+          metadata: {
+            user_id: userId,
+            plan_id: planId,
+            type,
+            diamonds,
+            months,
+          },
+        }),
+      });
+      const paystackData = await paystackRes.json();
+      if (paystackData && paystackData.status && paystackData.data?.authorization_url) {
+        return jsonResponse({
+          status: true,
+          message: 'Paystack transaction initialized',
+          data: paystackData.data,
+        });
+      } else {
+        return jsonResponse({
+          status: false,
+          message: paystackData?.message || 'Paystack initialization failed. Please verify your Paystack keys in admin settings.',
+        });
+      }
+    } catch (err: any) {
+      console.error('Paystack initialization error:', err);
+      return jsonResponse({
+        status: false,
+        message: 'Could not connect to Paystack payment gateway: ' + (err.message || 'Network error'),
+      });
+    }
   }
 
   // 12b. paystack/verify
@@ -1437,24 +1455,64 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       db.appdata[0]?.paystack_secret_key ||
       '';
 
-    let verified = true;
-    if (secretKey && !secretKey.includes('test_orange_paystack') && reference && !reference.startsWith('ORANGE_')) {
-      try {
-        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-          headers: {
-            Authorization: `Bearer ${secretKey}`,
-          },
+    if (!secretKey || secretKey.trim() === '' || secretKey.includes('test_orange_paystack')) {
+      return jsonResponse({
+        status: false,
+        message: 'Payment verification failed: Paystack secret key is not configured.',
+      });
+    }
+
+    if (!reference || reference.trim() === '') {
+      return jsonResponse({
+        status: false,
+        message: 'Payment verification failed: Reference is required.',
+      });
+    }
+
+    // Prevent duplicate crediting via processed reference list
+    if (!(db as any).processed_paystack_references) {
+      (db as any).processed_paystack_references = [];
+    }
+    if ((db as any).processed_paystack_references.includes(reference)) {
+      return jsonResponse({
+        status: false,
+        message: 'This payment transaction has already been credited.',
+      });
+    }
+
+    let verified = false;
+    try {
+      const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+        headers: {
+          Authorization: `Bearer ${secretKey.trim()}`,
+        },
+      });
+      const paystackData = await paystackRes.json();
+      if (paystackData?.status === true && paystackData?.data?.status === 'success') {
+        verified = true;
+      } else {
+        return jsonResponse({
+          status: false,
+          message: paystackData?.data?.gateway_response || paystackData?.message || 'Payment has not been completed on Paystack.',
         });
-        const paystackData = await paystackRes.json();
-        verified = paystackData?.data?.status === 'success';
-      } catch (err) {
-        console.error('Paystack verification error:', err);
       }
+    } catch (err: any) {
+      console.error('Paystack verification error:', err);
+      return jsonResponse({
+        status: false,
+        message: 'Paystack verification network error: ' + err.message,
+      });
     }
 
     if (!verified) {
-      return jsonResponse({ status: false, message: 'Payment verification failed' });
+      return jsonResponse({
+        status: false,
+        message: 'Payment verification failed: transaction was not completed.',
+      });
     }
+
+    // Mark reference as consumed
+    (db as any).processed_paystack_references.push(reference);
 
     if (type === 'diamond') {
       const addedCoins = diamonds > 0 ? diamonds : 100;
@@ -1471,8 +1529,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     return jsonResponse({
       status: true,
-      message: 'Payment verified and credited successfully!',
-      data: user,
+      message: type === 'diamond' ? `Successfully added ${diamonds} diamonds to your wallet!` : 'VIP Subscription activated successfully!',
+      data: {
+        wallet: user.wallet,
+        is_verified: user.is_verified,
+        is_pro: user.is_pro,
+      },
     });
   }
 
