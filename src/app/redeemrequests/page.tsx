@@ -166,7 +166,7 @@ export default function RedeemRequestsPage() {
                         ? r.user.images[0].image
                         : '/asset/img/user.png';
                     const avatarSrc = getImageUrl(avatar);
-                    const payable = r.payable_amount !== undefined ? `${r.currency || '$'}${r.payable_amount}` : `$${r.amount_paid || r.coin_amount || 0}`;
+                    const payable = r.payable_amount !== undefined ? `${r.currency || '₦'}${r.payable_amount}` : `₦${r.amount_paid || r.coin_amount || 0}`;
 
                     return (
                       <tr key={r.id}>

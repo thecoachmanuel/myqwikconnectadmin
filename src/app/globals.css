@@ -63,4 +63,12 @@ body {
   background: rgba(255, 111, 67, 0.75);
 }
 
+.sidebar-brand {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+}
+
 

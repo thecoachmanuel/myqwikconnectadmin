@@ -172,7 +172,7 @@ export default function PackagePage() {
                     />
                   </div>
                   <div className="form-group mb-3">
-                    <label className="font-weight-600">Price ($)</label>
+                    <label className="font-weight-600">Price (₦)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -278,7 +278,7 @@ export default function PackagePage() {
                     />
                   </div>
                   <div className="form-group mb-3">
-                    <label className="font-weight-600">Price ($)</label>
+                    <label className="font-weight-600">Price (₦)</label>
                     <input
                       type="number"
                       step="0.01"
@@ -400,7 +400,7 @@ export default function PackagePage() {
                       <td>{pack.description}</td>
                       <td>
                         <span className="badge badge-success text-white">
-                          ${pack.price}
+                          ₦{pack.price}
                         </span>
                       </td>
                       <td>{pack.months} month{pack.months > 1 ? 's' : ''}</td>

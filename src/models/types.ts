@@ -32,6 +32,12 @@ export interface AppData {
   play_store_download_link: string;
   app_store_download_link: string;
   uri_scheme: string;
+  paystack_public_key?: string;
+  paystack_secret_key?: string;
+  paystack_enabled?: number;
+  cloudinary_cloud_name?: string;
+  cloudinary_api_key?: string;
+  cloudinary_api_secret?: string;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +78,8 @@ export interface User {
   device_type: number;
   is_notification: number;
   is_verified: number;
+  is_pro?: number;
+  pro_expire_date?: string;
   show_on_map: number;
   anonymous: number;
   is_video_call: number;
@@ -127,6 +135,7 @@ export interface LiveApplication {
   languages: string;
   intro_video: string;
   social_links: string;
+  status?: number;
   created_at: string;
   updated_at: string;
   user?: User;
@@ -298,9 +307,13 @@ export interface UserNotification {
   id: number;
   my_user_id: number;
   user_id: number;
-  item_id: number;
+  item_id?: number;
   type: number;
+  title?: string;
+  message?: string;
+  is_read?: number;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  user?: User;
 }
 

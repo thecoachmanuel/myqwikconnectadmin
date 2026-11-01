@@ -189,7 +189,7 @@ export default function SettingPage() {
                           type="text"
                           className="form-control"
                           name="currency"
-                          value={appdata.currency || '$'}
+                          value={appdata.currency || '₦'}
                           onChange={(e) => setAppdata({ ...appdata, currency: e.target.value })}
                           required
                         />
@@ -215,6 +215,69 @@ export default function SettingPage() {
                           value={appdata.coin_rate || ''}
                           onChange={(e) => setAppdata({ ...appdata, coin_rate: e.target.value })}
                           required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row mt-3">
+                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Paystack Payment Gateway (Naira Real Payment)</h6></div>
+                      <div className="form-group col-md-6">
+                        <label>Paystack Public Key</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="paystack_public_key"
+                          placeholder="pk_test_... or pk_live_..."
+                          value={appdata.paystack_public_key || ''}
+                          onChange={(e) => setAppdata({ ...appdata, paystack_public_key: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group col-md-6">
+                        <label>Paystack Secret Key</label>
+                        <input
+                          type="password"
+                          className="form-control"
+                          name="paystack_secret_key"
+                          placeholder="sk_test_... or sk_live_..."
+                          value={appdata.paystack_secret_key || ''}
+                          onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-row mt-2">
+                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Cloudinary Media Storage (Feed & Chat Media)</h6></div>
+                      <div className="form-group col-md-4">
+                        <label>Cloud Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="cloudinary_cloud_name"
+                          placeholder="your-cloud-name"
+                          value={appdata.cloudinary_cloud_name || ''}
+                          onChange={(e) => setAppdata({ ...appdata, cloudinary_cloud_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group col-md-4">
+                        <label>API Key</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="cloudinary_api_key"
+                          placeholder="Cloudinary API Key"
+                          value={appdata.cloudinary_api_key || ''}
+                          onChange={(e) => setAppdata({ ...appdata, cloudinary_api_key: e.target.value })}
+                        />
+                      </div>
+                      <div className="form-group col-md-4">
+                        <label>API Secret</label>
+                        <input
+                          type="password"
+                          className="form-control"
+                          name="cloudinary_api_secret"
+                          placeholder="Cloudinary API Secret"
+                          value={appdata.cloudinary_api_secret || ''}
+                          onChange={(e) => setAppdata({ ...appdata, cloudinary_api_secret: e.target.value })}
                         />
                       </div>
                     </div>

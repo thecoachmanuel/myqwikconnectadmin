@@ -32,6 +32,47 @@ export function checkApiKey(request: Request): boolean {
   return apikey.toString() === '123';
 }
 
+export async function uploadToCloudinaryIfConfigured(
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string
+): Promise<string | null> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return null;
+  }
+
+  try {
+    const crypto = await import('crypto');
+    const timestamp = Math.floor(Date.now() / 1000);
+    const resourceType = mimeType.startsWith('video') ? 'video' : 'image';
+    const paramsToSign = `timestamp=${timestamp}${apiSecret}`;
+    const signature = crypto.createHash('sha1').update(paramsToSign).digest('hex');
+
+    const formData = new FormData();
+    const blob = new Blob([buffer as any], { type: mimeType });
+    formData.append('file', blob, fileName);
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('signature', signature);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+    const result = await res.json();
+    if (result && (result.secure_url || result.url)) {
+      return result.secure_url || result.url;
+    }
+  } catch (err) {
+    console.error('Cloudinary upload error:', err);
+  }
+  return null;
+}
+
 export async function parseRequestBody(request: Request): Promise<{ fields: Record<string, any>; files: { fieldname: string; filename: string; path: string; url: string }[] }> {
   const contentType = request.headers.get('content-type') || '';
   const fields: Record<string, any> = {};
@@ -74,8 +115,13 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
 
             let targetPath = '';
             let relPath = `uploads/${uniqueName}`;
+            const mimeType = value.type || (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.mp4' ? 'video/mp4' : 'image/jpeg');
 
-            if (isFsWritable) {
+            // Try Cloudinary first if credentials configured
+            const cloudUrl = await uploadToCloudinaryIfConfigured(buffer, uniqueName, mimeType);
+            if (cloudUrl) {
+              relPath = cloudUrl;
+            } else if (isFsWritable) {
               try {
                 targetPath = path.join(uploadDir, uniqueName);
                 fs.writeFileSync(targetPath, buffer);
@@ -94,7 +140,6 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
               } catch {}
             }
 
-            const mimeType = value.type || (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.mp4' ? 'video/mp4' : 'image/jpeg');
             if (!isFsWritable && (process.env.VERCEL || buffer.length <= 4 * 1024 * 1024)) {
               relPath = `data:${mimeType};base64,${buffer.toString('base64')}`;
             }

@@ -40,6 +40,15 @@ function initGeoLookups() {
       countryNameToCodeMap.set(c.name.toLowerCase().trim(), c.isoCode.toUpperCase().trim());
       countryNameToCodeMap.set(c.isoCode.toLowerCase().trim(), c.isoCode.toUpperCase().trim());
     }
+
+    // Prioritize Nigeria at index 0
+    const ngIdx = cachedCountries.findIndex(
+      (c) => c.code === 'NG' || c.name.toLowerCase() === 'nigeria'
+    );
+    if (ngIdx > 0) {
+      const [nigeria] = cachedCountries.splice(ngIdx, 1);
+      cachedCountries.unshift(nigeria);
+    }
   } catch (err) {
     console.error('Error initializing country-state-city geo lookups:', err);
     cachedCountries = [];
@@ -121,8 +130,10 @@ export async function GET(req: NextRequest) {
       cityList = City.getCitiesOfState(cCode, sCode).map((c) => c.name);
     }
 
-    // Fallback to all cities of country if state yielded none
-    if (cityList.length === 0 && cCode) {
+    // If state yielded none, provide the state itself as default city rather than polluting with cities from other states
+    if (cityList.length === 0 && stateParam) {
+      cityList = [stateParam];
+    } else if (cityList.length === 0 && cCode && !sCode) {
       cityList = City.getCitiesOfCountry(cCode).map((c) => c.name);
     }
 
@@ -192,7 +203,9 @@ export async function POST(req: NextRequest) {
       if (cCode && sCode) {
         cityList = City.getCitiesOfState(cCode, sCode).map((c) => c.name);
       }
-      if (cityList.length === 0 && cCode) {
+      if (cityList.length === 0 && stateParam) {
+        cityList = [stateParam];
+      } else if (cityList.length === 0 && cCode && !sCode) {
         cityList = City.getCitiesOfCountry(cCode).map((c) => c.name);
       }
 

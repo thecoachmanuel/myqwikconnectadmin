@@ -15,7 +15,26 @@ export default function AdminLayout({
   const router = useRouter();
   const [appName, setAppName] = useState('Orange');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [badgeCounts, setBadgeCounts] = useState({
+    pendingVerification: 0,
+    pendingLive: 0,
+    pendingRedeem: 0,
+    pendingReports: 0,
+    totalPending: 0,
+  });
+
+  useEffect(() => {
+    fetch('/api/getAdminBadgeCounts')
+      .then((res) => res.json())
+      .then((res) => {
+        if (res.data) {
+          setBadgeCounts(res.data);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   useEffect(() => {
     // Check authentication
@@ -146,6 +165,105 @@ export default function AdminLayout({
             </ul>
           </div>
           <ul className="navbar-nav navbar-right">
+            {/* Admin Notifications Dropdown */}
+            <li className={`dropdown dropdown-list-toggle ${notifOpen ? 'show' : ''}`}>
+              <a
+                href="#"
+                data-toggle="dropdown"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setNotifOpen(!notifOpen);
+                }}
+                className="nav-link notification-toggle nav-link-lg"
+                style={{ position: 'relative' }}
+              >
+                <i className="far fa-bell" style={{ fontSize: '18px' }}></i>
+                {badgeCounts.totalPending > 0 && (
+                  <span
+                    className="badge badge-danger"
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      padding: '2px 5px',
+                      fontSize: '10px',
+                      borderRadius: '10px',
+                    }}
+                  >
+                    {badgeCounts.totalPending}
+                  </span>
+                )}
+              </a>
+              <div
+                className={`dropdown-menu dropdown-list dropdown-menu-right pullDown ${notifOpen ? 'show' : ''}`}
+                style={{ display: notifOpen ? 'block' : 'none', minWidth: '300px' }}
+              >
+                <div className="dropdown-header font-weight-bold d-flex justify-content-between align-items-center">
+                  <span>Platform Notifications</span>
+                  <span className="badge badge-primary">{badgeCounts.totalPending} pending</span>
+                </div>
+                <div className="dropdown-list-content">
+                  {badgeCounts.pendingVerification > 0 && (
+                    <Link
+                      href="/verificationrequests"
+                      className="dropdown-item d-flex align-items-center py-2"
+                      onClick={() => setNotifOpen(false)}
+                    >
+                      <i className="fas fa-check-circle text-primary mr-2" style={{ fontSize: '16px' }}></i>
+                      <div>
+                        <strong>{badgeCounts.pendingVerification} Verification Request(s)</strong>
+                        <div className="text-muted small">Users awaiting verification badge</div>
+                      </div>
+                    </Link>
+                  )}
+                  {badgeCounts.pendingLive > 0 && (
+                    <Link
+                      href="/liveapplication"
+                      className="dropdown-item d-flex align-items-center py-2"
+                      onClick={() => setNotifOpen(false)}
+                    >
+                      <i className="fas fa-rss text-danger mr-2" style={{ fontSize: '16px' }}></i>
+                      <div>
+                        <strong>{badgeCounts.pendingLive} Live Application(s)</strong>
+                        <div className="text-muted small">Streamers awaiting live approval</div>
+                      </div>
+                    </Link>
+                  )}
+                  {badgeCounts.pendingRedeem > 0 && (
+                    <Link
+                      href="/redeemrequests"
+                      className="dropdown-item d-flex align-items-center py-2"
+                      onClick={() => setNotifOpen(false)}
+                    >
+                      <i className="fas fa-university text-warning mr-2" style={{ fontSize: '16px' }}></i>
+                      <div>
+                        <strong>{badgeCounts.pendingRedeem} Redeem Request(s)</strong>
+                        <div className="text-muted small">Diamonds payout requests pending</div>
+                      </div>
+                    </Link>
+                  )}
+                  {badgeCounts.pendingReports > 0 && (
+                    <Link
+                      href="/report"
+                      className="dropdown-item d-flex align-items-center py-2"
+                      onClick={() => setNotifOpen(false)}
+                    >
+                      <i className="fas fa-question text-danger mr-2" style={{ fontSize: '16px' }}></i>
+                      <div>
+                        <strong>{badgeCounts.pendingReports} User / Post Report(s)</strong>
+                        <div className="text-muted small">Flagged content pending review</div>
+                      </div>
+                    </Link>
+                  )}
+                  {badgeCounts.totalPending === 0 && (
+                    <div className="p-3 text-center text-muted small">
+                      <i className="fas fa-check-double text-success mb-2" style={{ fontSize: '24px' }}></i>
+                      <div>All caught up! No pending requests or reports.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </li>
             <li className={`dropdown ${dropdownOpen ? 'show' : ''}`}>
               <a
                 href="#"
@@ -192,7 +310,17 @@ export default function AdminLayout({
               WebkitOverflowScrolling: 'touch',
             }}
           >
-            <div className="sidebar-brand">
+            <div
+              className="sidebar-brand"
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 100,
+                backgroundColor: '#ffffff',
+                borderBottom: '1px solid #f0f2f5',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+              }}
+            >
               <Link href="/index">
                 <span className="logo-name">{appName}</span>
               </Link>

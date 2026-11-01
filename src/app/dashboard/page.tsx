@@ -21,8 +21,8 @@ export default function DashboardPage() {
     commissionPercentage: 10,
     platformEarnings: 0,
     totalPayoutsPaid: 0,
-    coinRate: 0.006,
-    currency: '$',
+    coinRate: 5.0,
+    currency: '₦',
   });
 
   const currentDate = new Date();

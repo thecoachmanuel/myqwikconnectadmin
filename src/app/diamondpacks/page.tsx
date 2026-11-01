@@ -12,12 +12,14 @@ export default function DiamondPacksPage() {
   // Add Pack Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [addAmount, setAddAmount] = useState(100);
+  const [addPrice, setAddPrice] = useState(1500);
   const [addPlaystore, setAddPlaystore] = useState('');
   const [addAppstore, setAddAppstore] = useState('');
 
   // Edit Pack Modal
   const [editingPack, setEditingPack] = useState<any | null>(null);
   const [editAmount, setEditAmount] = useState(100);
+  const [editPrice, setEditPrice] = useState(1500);
   const [editPlaystore, setEditPlaystore] = useState('');
   const [editAppstore, setEditAppstore] = useState('');
 
@@ -61,12 +63,14 @@ export default function DiamondPacksPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: addAmount,
+        price: addPrice,
         android_product_id: addPlaystore,
         ios_product_id: addAppstore,
       }),
     });
     setShowAddModal(false);
     setAddAmount(100);
+    setAddPrice(1500);
     setAddPlaystore('');
     setAddAppstore('');
     fetchPacks();
@@ -81,6 +85,7 @@ export default function DiamondPacksPage() {
       body: JSON.stringify({
         id: editingPack.id,
         amount: editAmount,
+        price: editPrice,
         android_product_id: editPlaystore,
         ios_product_id: editAppstore,
       }),
@@ -135,6 +140,7 @@ export default function DiamondPacksPage() {
               <thead>
                 <tr>
                   <th>Diamond Amount</th>
+                  <th>Price (₦)</th>
                   <th>Playstoreid</th>
                   <th>Appstoreid</th>
                   <th style={{ width: '200px', textAlign: 'right' }}>Action</th>
@@ -143,28 +149,37 @@ export default function DiamondPacksPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-4">
+                    <td colSpan={5} className="text-center py-4">
                       Loading...
                     </td>
                   </tr>
                 ) : filteredPacks.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center py-4">
+                    <td colSpan={5} className="text-center py-4">
                       No diamond packs found.
                     </td>
                   </tr>
                 ) : (
                   filteredPacks.map((p) => (
                     <tr key={p.id}>
-                      <td>{p.amount}</td>
-                      <td>{p.android_product_id}</td>
-                      <td>{p.ios_product_id}</td>
+                      <td className="font-weight-600">
+                        <i className="fas fa-gem text-primary mr-2"></i>
+                        {p.amount} Diamonds
+                      </td>
+                      <td>
+                        <span className="badge badge-success text-white">
+                          ₦{(p.price || p.amount * 15).toLocaleString()}
+                        </span>
+                      </td>
+                      <td><code>{p.android_product_id}</code></td>
+                      <td><code>{p.ios_product_id}</code></td>
                       <td style={{ textAlign: 'right' }}>
                         <button
                           className="btn btn-sm btn-info text-white mr-2"
                           onClick={() => {
                             setEditingPack(p);
                             setEditAmount(p.amount);
+                            setEditPrice(p.price || p.amount * 15);
                             setEditPlaystore(p.android_product_id || '');
                             setEditAppstore(p.ios_product_id || '');
                           }}
@@ -220,6 +235,17 @@ export default function DiamondPacksPage() {
                       required
                       value={addAmount}
                       onChange={(e) => setAddAmount(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="form-group mb-3">
+                    <label>Price (₦)</label>
+                    <input
+                      type="number"
+                      name="price"
+                      className="form-control"
+                      required
+                      value={addPrice}
+                      onChange={(e) => setAddPrice(parseInt(e.target.value) || 0)}
                     />
                   </div>
                   <div className="form-group mb-3">
@@ -289,6 +315,17 @@ export default function DiamondPacksPage() {
                       required
                       value={editAmount}
                       onChange={(e) => setEditAmount(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="form-group mb-3">
+                    <label>Price (₦)</label>
+                    <input
+                      type="number"
+                      name="price"
+                      className="form-control"
+                      required
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(parseInt(e.target.value) || 0)}
                     />
                   </div>
                   <div className="form-group mb-3">

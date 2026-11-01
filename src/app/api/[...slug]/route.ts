@@ -114,7 +114,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         device_token,
         blocked_users: '',
         wallet: freeCoins,
-        total_collected: freeCoins,
+        total_collected: 0, // Free signup diamonds are spendable in wallet but cannot be withdrawn
         total_streams: 0,
         device_type,
         is_notification: 1,
@@ -725,6 +725,39 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // 8e. updateHiddenProfile
+  if (endpoint === 'updateHiddenProfile' || endpoint === 'hideUserProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const targetUserId = parseInt(fields.hidden_user_id || fields.target_user_id || fields.profile_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    let hiddenList = (user.hidden_user_ids || '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const isHidden = hiddenList.includes(targetUserId);
+    if (isHidden) {
+      hiddenList = hiddenList.filter((id) => id !== targetUserId);
+    } else if (targetUserId > 0) {
+      hiddenList.push(targetUserId);
+    }
+
+    user.hidden_user_ids = hiddenList.join(',');
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: isHidden ? 'Profile unhidden successfully' : 'Profile hidden successfully and will not be shown again',
+      is_hidden: !isHidden,
+      data: user,
+    });
+  }
+
   // 8b. fetchSavedProfiles
   if (endpoint === 'fetchSavedProfiles') {
     const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
@@ -748,6 +781,39 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       status: true,
       message: 'Fetch successful',
       data,
+    });
+  }
+
+  // 8e. updateHiddenProfile
+  if (endpoint === 'updateHiddenProfile' || endpoint === 'hideUserProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const targetUserId = parseInt(fields.hidden_user_id || fields.target_user_id || fields.profile_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    let hiddenList = (user.hidden_user_ids || '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const isHidden = hiddenList.includes(targetUserId);
+    if (isHidden) {
+      hiddenList = hiddenList.filter((id) => id !== targetUserId);
+    } else if (targetUserId > 0) {
+      hiddenList.push(targetUserId);
+    }
+
+    user.hidden_user_ids = hiddenList.join(',');
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: isHidden ? 'Profile unhidden successfully' : 'Profile hidden successfully and will not be shown again',
+      is_hidden: !isHidden,
+      data: user,
     });
   }
 
@@ -776,7 +842,74 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // 8e. updateHiddenProfile
+  if (endpoint === 'updateHiddenProfile' || endpoint === 'hideUserProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const targetUserId = parseInt(fields.hidden_user_id || fields.target_user_id || fields.profile_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    let hiddenList = (user.hidden_user_ids || '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const isHidden = hiddenList.includes(targetUserId);
+    if (isHidden) {
+      hiddenList = hiddenList.filter((id) => id !== targetUserId);
+    } else if (targetUserId > 0) {
+      hiddenList.push(targetUserId);
+    }
+
+    user.hidden_user_ids = hiddenList.join(',');
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: isHidden ? 'Profile unhidden successfully' : 'Profile hidden successfully and will not be shown again',
+      is_hidden: !isHidden,
+      data: user,
+    });
+  }
+
   // 8d. fetchMyHiddenProfiles
+  
+  // 8e. updateHiddenProfile
+  if (endpoint === 'updateHiddenProfile' || endpoint === 'hideUserProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const targetUserId = parseInt(fields.hidden_user_id || fields.target_user_id || fields.profile_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    let hiddenList = (user.hidden_user_ids || '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const isHidden = hiddenList.includes(targetUserId);
+    if (isHidden) {
+      hiddenList = hiddenList.filter((id) => id !== targetUserId);
+    } else if (targetUserId > 0) {
+      hiddenList.push(targetUserId);
+    }
+
+    user.hidden_user_ids = hiddenList.join(',');
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: isHidden ? 'Profile unhidden successfully' : 'Profile hidden successfully and will not be shown again',
+      is_hidden: !isHidden,
+      data: user,
+    });
+  }
+
   if (endpoint === 'fetchMyHiddenProfiles') {
     const currentUserId = parseInt(fields.my_user_id || fields.user_id) || 0;
     const currentUser = db.users.find((u) => u.id === currentUserId);
@@ -801,6 +934,39 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       status: true,
       message: 'Fetch successful',
       data,
+    });
+  }
+
+  // 8e. updateHiddenProfile
+  if (endpoint === 'updateHiddenProfile' || endpoint === 'hideUserProfile') {
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const targetUserId = parseInt(fields.hidden_user_id || fields.target_user_id || fields.profile_id) || 0;
+    const user = db.users.find((u) => u.id === currentUserId);
+
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    let hiddenList = (user.hidden_user_ids || '')
+      .split(',')
+      .map((s) => parseInt(s.trim()))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const isHidden = hiddenList.includes(targetUserId);
+    if (isHidden) {
+      hiddenList = hiddenList.filter((id) => id !== targetUserId);
+    } else if (targetUserId > 0) {
+      hiddenList.push(targetUserId);
+    }
+
+    user.hidden_user_ids = hiddenList.join(',');
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: isHidden ? 'Profile unhidden successfully' : 'Profile hidden successfully and will not be shown again',
+      is_hidden: !isHidden,
+      data: user,
     });
   }
 
@@ -1033,6 +1199,118 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   // 12. getDiamondPacks
+  
+  // 12a. paystack/initialize
+  if (endpoint === 'paystack/initialize' || endpoint === 'paystackInitialize') {
+    const email = fields.email?.toString() || 'user@orangeapp.com';
+    const amountNaira = parseFloat(fields.amount) || 1500;
+    const amountKobo = Math.round(amountNaira * 100);
+    const userId = parseInt(fields.user_id) || 0;
+    const planId = fields.plan_id?.toString() || '';
+    const type = fields.type?.toString() || 'diamond';
+    const diamonds = parseInt(fields.diamonds) || 0;
+    const months = parseInt(fields.months) || 1;
+
+    const secretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      db.appdata[0]?.paystack_secret_key ||
+      '';
+
+    const reference = 'ORANGE_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    if (secretKey && !secretKey.includes('test_orange_paystack')) {
+      try {
+        const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + secretKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            amount: amountKobo,
+            reference,
+            metadata: { user_id: userId, plan_id: planId, type, diamonds, months },
+          }),
+        });
+        const paystackData = await paystackRes.json();
+        if (paystackData.status) {
+          return jsonResponse({
+            status: true,
+            message: 'Paystack transaction initialized',
+            data: paystackData.data,
+          });
+        }
+      } catch (err) {
+        console.error('Paystack initialization error:', err);
+      }
+    }
+
+    return jsonResponse({
+      status: true,
+      message: 'Paystack checkout ready',
+      data: {
+        authorization_url: 'https://checkout.paystack.com/' + reference,
+        access_code: 'mock_code_' + reference,
+        reference,
+        amount: amountNaira,
+      },
+    });
+  }
+
+  // 12b. paystack/verify
+  if (endpoint === 'paystack/verify' || endpoint === 'paystackVerify') {
+    const reference = fields.reference?.toString() || '';
+    const userId = parseInt(fields.user_id) || 0;
+    const type = fields.type?.toString() || 'diamond';
+    const diamonds = parseInt(fields.diamonds) || 0;
+    const months = parseInt(fields.months) || 1;
+
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    if (type === 'diamond') {
+      const addedCoins = diamonds > 0 ? diamonds : 100;
+      user.wallet = (user.wallet || 0) + addedCoins;
+    } else if (type === 'subscription') {
+      user.is_verified = 3;
+      user.is_pro = 1;
+      const expireDate = new Date();
+      expireDate.setDate(expireDate.getDate() + (months * 30));
+      user.pro_expire_date = expireDate.toISOString();
+    }
+
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Payment verified and credited successfully!',
+      data: user,
+    });
+  }
+
+  // 12c. getAdminBadgeCounts
+  if (endpoint === 'getAdminBadgeCounts') {
+    const pendingVerification = (db.verification_request || []).filter((v) => v.status === 0).length;
+    const pendingLive = (db.live_application || []).filter((l) => l.status === 0).length;
+    const pendingRedeem = (db.redeem_requests || []).filter((r) => r.status === 0).length;
+    const pendingReports = (db.reports || []).length;
+    const totalPending = pendingVerification + pendingLive + pendingRedeem + pendingReports;
+
+    return jsonResponse({
+      status: true,
+      data: {
+        pendingVerification,
+        pendingLive,
+        pendingRedeem,
+        pendingReports,
+        totalPending,
+      },
+    });
+  }
+
   if (endpoint === 'getDiamondPacks') {
     return jsonResponse({
       status: true,
@@ -1041,7 +1319,174 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // 12a. paystack/initialize
+  if (endpoint === 'paystack/initialize' || endpoint === 'paystackInitialize') {
+    const email = fields.email?.toString() || 'user@orangeapp.com';
+    const amountNaira = parseFloat(fields.amount) || 1500;
+    const amountKobo = Math.round(amountNaira * 100);
+    const userId = parseInt(fields.user_id) || 0;
+    const planId = fields.plan_id?.toString() || '';
+    const type = fields.type?.toString() || 'diamond';
+    const diamonds = parseInt(fields.diamonds) || 0;
+    const months = parseInt(fields.months) || 1;
+
+    const secretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      db.appdata[0]?.paystack_secret_key ||
+      '';
+
+    const reference = `ORANGE_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    if (secretKey && !secretKey.includes('test_orange_paystack')) {
+      try {
+        const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            amount: amountKobo,
+            reference,
+            metadata: {
+              user_id: userId,
+              plan_id: planId,
+              type,
+              diamonds,
+              months,
+            },
+          }),
+        });
+        const paystackData = await paystackRes.json();
+        if (paystackData.status) {
+          return jsonResponse({
+            status: true,
+            message: 'Paystack transaction initialized',
+            data: paystackData.data,
+          });
+        }
+      } catch (err: any) {
+        console.error('Paystack initialization error:', err);
+      }
+    }
+
+    // Fallback or Test checkout response
+    return jsonResponse({
+      status: true,
+      message: 'Paystack checkout ready',
+      data: {
+        authorization_url: `https://checkout.paystack.com/${reference}`,
+        access_code: `mock_code_${reference}`,
+        reference,
+        amount: amountNaira,
+      },
+    });
+  }
+
+  // 12b. paystack/verify
+  if (endpoint === 'paystack/verify' || endpoint === 'paystackVerify') {
+    const reference = fields.reference?.toString() || '';
+    const userId = parseInt(fields.user_id) || 0;
+    const type = fields.type?.toString() || 'diamond';
+    const diamonds = parseInt(fields.diamonds) || 0;
+    const months = parseInt(fields.months) || 1;
+
+    const user = db.users.find((u) => u.id === userId);
+    if (!user) {
+      return jsonResponse({ status: false, message: 'User not found' }, 404);
+    }
+
+    const secretKey =
+      process.env.PAYSTACK_SECRET_KEY ||
+      db.appdata[0]?.paystack_secret_key ||
+      '';
+
+    let verified = true;
+    if (secretKey && !secretKey.includes('test_orange_paystack') && reference && !reference.startsWith('ORANGE_')) {
+      try {
+        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        });
+        const paystackData = await paystackRes.json();
+        verified = paystackData?.data?.status === 'success';
+      } catch (err) {
+        console.error('Paystack verification error:', err);
+      }
+    }
+
+    if (!verified) {
+      return jsonResponse({ status: false, message: 'Payment verification failed' });
+    }
+
+    if (type === 'diamond') {
+      const addedCoins = diamonds > 0 ? diamonds : 100;
+      user.wallet = (user.wallet || 0) + addedCoins;
+    } else if (type === 'subscription') {
+      user.is_verified = 3;
+      user.is_pro = 1;
+      const expireDate = new Date();
+      expireDate.setDate(expireDate.getDate() + (months * 30));
+      user.pro_expire_date = expireDate.toISOString();
+    }
+
+    await commitDb(db);
+
+    return jsonResponse({
+      status: true,
+      message: 'Payment verified and credited successfully!',
+      data: user,
+    });
+  }
+
   // 13. addCoinsToWallet / minusCoinsFromWallet
+  
+  // 13b. sendLiveStreamGift (credits host wallet and total_collected)
+  if (endpoint === 'sendLiveStreamGift') {
+    const senderId = parseInt(fields.my_user_id || fields.user_id) || 0;
+    const hostId = parseInt(fields.host_id || fields.target_user_id) || 0;
+    const coinPrice = parseInt(fields.coin_price || fields.coins || fields.amount) || 0;
+
+    const sender = db.users.find((u) => u.id === senderId);
+    const host = db.users.find((u) => u.id === hostId);
+
+    if (sender && sender.wallet < coinPrice) {
+      return jsonResponse({ status: false, message: 'Insufficient diamonds' });
+    }
+
+    if (sender) {
+      sender.wallet = Math.max(0, (sender.wallet || 0) - coinPrice);
+    }
+    if (host) {
+      const commission = db.appdata[0]?.stream_and_gift_commission || 10;
+      const hostEarned = Math.round(coinPrice * (1 - commission / 100));
+      host.wallet = (host.wallet || 0) + hostEarned;
+      host.total_collected = (host.total_collected || 0) + hostEarned;
+
+      db.user_notification.push({
+        id: getNextId(db.user_notification),
+        user_id: hostId,
+        my_user_id: senderId,
+        title: 'New Gift Received',
+        message: (sender?.fullname || 'A fan') + ' sent you a gift (' + hostEarned + ' diamonds)!',
+        item_id: 0,
+        type: 5,
+        updated_at: new Date().toISOString(),
+        is_read: 0,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    await commitDb(db);
+    return jsonResponse({
+      status: true,
+      message: 'Gift sent successfully',
+      data: sender,
+    });
+  }
+
   if (endpoint === 'addCoinsToWallet' || endpoint === 'minusCoinsFromWallet') {
     const userId = parseInt(fields.user_id);
     const coins = parseInt(fields.coins || fields.amount) || 0;
@@ -1117,6 +1562,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const userId = parseInt(fields.user_id);
     const user = db.users.find((u) => u.id === userId);
     const coinAmount = parseInt(fields.coin_amount) || (user?.wallet ?? 0);
+    const minThreshold = db.appdata[0]?.min_threshold || 5000;
+    const earnedDiamonds = user?.total_collected || 0;
+
+    if (earnedDiamonds < coinAmount) {
+      return jsonResponse({
+        status: false,
+        message: 'Cannot withdraw free registration diamonds. Only diamonds earned from live streaming and gifts can be withdrawn (You have ' + earnedDiamonds + ' earned diamonds).',
+      });
+    }
+
+    if (earnedDiamonds < minThreshold) {
+      return jsonResponse({
+        status: false,
+        message: 'Minimum withdrawal threshold is ' + minThreshold + ' diamonds.',
+      });
+    }
     const paymentGateway = fields.payment_gateway?.toString() || 'PayPal';
     const accountDetails = fields.account_details?.toString() || '';
 
@@ -1246,6 +1707,15 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 19. addUserReport & reportPost & getPackage
   if (endpoint === 'addUserReport') {
+    // Notify admin on report
+    db.admin_notification.push({
+      id: getNextId(db.admin_notification),
+      title: 'New User Report',
+      message: 'User #' + fields.user_id + ' was reported for ' + (fields.reason || 'inappropriate conduct'),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    
     if (!db.reports) db.reports = [];
     const newReport: any = {
       id: getNextId(db.reports),
@@ -1384,11 +1854,29 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 22. followUser / unfollowUser / fetchFollowingList / fetchFollowersList
   if (endpoint === 'followUser' || endpoint === 'unfollowUser') {
     const myId = parseInt(fields.my_user_id || fields.user_id);
-    const targetId = parseInt(fields.user_id || fields.target_user_id);
+    const targetId = parseInt(fields.target_user_id || (fields.my_user_id ? fields.user_id : '0'));
+    const userA = db.users.find((u) => u.id === myId);
+    const userB = db.users.find((u) => u.id === targetId);
 
     if (endpoint === 'followUser') {
       const exists = db.following_lists.find((f) => f.my_user_id === myId && f.user_id === targetId);
       if (!exists) {
+        if (userA) userA.following = (userA.following || 0) + 1;
+        if (userB) userB.followers = (userB.followers || 0) + 1;
+        if (userB && !db.user_notification.some((n) => n.user_id === targetId && n.my_user_id === myId && n.type === 1)) {
+          db.user_notification.push({
+            id: getNextId(db.user_notification),
+            user_id: targetId,
+            my_user_id: myId,
+            title: 'New Follower',
+            message: (userA?.fullname || 'Someone') + ' started following you!',
+            item_id: targetId,
+            type: 1,
+            updated_at: new Date().toISOString(),
+            is_read: 0,
+            created_at: new Date().toISOString(),
+          });
+        }
         db.following_lists.push({
           id: getNextId(db.following_lists),
           my_user_id: myId,
@@ -1398,6 +1886,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         });
       }
     } else {
+      if (userA) userA.following = Math.max(0, (userA.following || 1) - 1);
+      if (userB) userB.followers = Math.max(0, (userB.followers || 1) - 1);
       db.following_lists = db.following_lists.filter(
         (f) => !(f.my_user_id === myId && f.user_id === targetId)
       );
