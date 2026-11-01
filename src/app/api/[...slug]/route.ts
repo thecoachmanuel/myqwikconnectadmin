@@ -519,63 +519,92 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const userLon = parseFloat(currentUser?.longitude || '0');
     const hasUserCoords = !isNaN(userLat) && !isNaN(userLon) && (userLat !== 0 || userLon !== 0);
 
-    // Compute personalized match score for each candidate profile
+    // Compute personalized match score for each candidate profile (Top Dating App Model)
     const scoredList = list.map((u) => {
       let score = 0;
 
-      // 1. Gender preference (+40)
+      // 1. Secret Admirer / Inbound Likes Boost (Tinder/Bumble Instant Match Logic)
+      const hasLikedMe = (db.liked_profiles || []).some(
+        (lp) => lp.my_user_id === u.id && lp.user_id === currentUserId
+      );
+      if (hasLikedMe) {
+        score += 80;
+      }
+
+      // 2. Activity Recency & Live Presence
+      if (u.is_live_now === 1) {
+        score += 65;
+      }
+      const lastActive = u.updated_at ? new Date(u.updated_at).getTime() : 0;
+      const hoursActiveAgo = lastActive > 0 ? (Date.now() - lastActive) / (1000 * 60 * 60) : 1000;
+      if (hoursActiveAgo < 24) {
+        score += 45;
+      } else if (hoursActiveAgo < 72) {
+        score += 25;
+      }
+
+      // 3. New User Discovery Boost (Discovery for newcomers in last 3 days)
+      const joinedTime = u.created_at ? new Date(u.created_at).getTime() : 0;
+      const hoursSinceJoined = joinedTime > 0 ? (Date.now() - joinedTime) / (1000 * 60 * 60) : 1000;
+      if (hoursSinceJoined < 72) {
+        score += 35;
+      }
+
+      // 4. Gender preference (+40)
       if (currentUser?.gender_preferred && Number(currentUser.gender_preferred) !== 3) {
         if (Number(u.gender) === Number(currentUser.gender_preferred)) {
           score += 40;
         }
       }
 
-      // 2. Shared interests (+20 points per shared interest)
+      // 5. Shared interests (+25 points per shared interest)
       const theirInterests = String(u.interests || '')
         .split(',')
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean);
       const sharedInterests = theirInterests.filter((i) => myInterests.includes(i));
-      score += sharedInterests.length * 20;
+      score += sharedInterests.length * 25;
 
-      // 3. Shared relationship goals (+35 points)
+      // 6. Shared relationship goals (+40 points)
       const theirGoals = String(u.relationship_goal_id || '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
       const goalMatched = theirGoals.some((g) => myGoals.includes(g));
-      if (goalMatched) score += 35;
+      if (goalMatched) score += 40;
 
-      // 4. Religion match (+15 points)
+      // 7. Religion match (+15 points)
       if (myRel && String(u.religion_key || '').trim().toLowerCase() === myRel) {
         score += 15;
       }
 
-      // 5. Proximity & Location match
+      // 8. Proximity & Location match
       const uCity = (u.city || '').trim().toLowerCase();
       const uState = (u.state || '').trim().toLowerCase();
       const uCountry = (u.country || '').trim().toLowerCase();
-
-      if (myCity && uCity && myCity === uCity) score += 35;
-      else if (myState && uState && myState === uState) score += 20;
-      else if (myCountry && uCountry && myCountry === uCountry) score += 10;
 
       if (hasUserCoords) {
         const uLat = parseFloat(u.lattitude || u.latitude || '0');
         const uLon = parseFloat(u.longitude || '0');
         if (!isNaN(uLat) && !isNaN(uLon) && (uLat !== 0 || uLon !== 0)) {
           const dist = getDistanceKm(userLat, userLon, uLat, uLon);
-          if (dist <= 25) score += 30;
-          else if (dist <= 75) score += 20;
-          else if (dist <= 200) score += 10;
+          if (dist <= 15) score += 45;
+          else if (dist <= 40) score += 30;
+          else if (dist <= 100) score += 15;
         }
+      } else {
+        if (myCity && uCity && myCity === uCity) score += 40;
+        else if (myState && uState && myState === uState) score += 25;
+        else if (myCountry && uCountry && myCountry === uCountry) score += 15;
       }
 
-      // 6. Profile completeness & authenticity bonus
-      if (u.about && u.about.trim().length > 15) score += 10;
-      if (u.is_verified === 1 || u.is_verified === 2 || u.is_verified === 3) score += 20;
+      // 9. Profile completeness & authenticity bonus
+      if (u.is_verified === 1 || u.is_verified === 2 || u.is_verified === 3) score += 25;
+      if (u.about && u.about.trim().length > 20) score += 15;
+      const imgCount = db.images.filter((img) => img.user_id === u.id).length;
+      if (imgCount >= 2) score += 20;
 
-      // 7. Dynamic shuffle jitter (+/- 8 points) so each refresh offers fresh variety while keeping relevance
+      // 10. Dynamic explore shuffle jitter (+/- 8 points) so each refresh offers fresh variety while keeping relevance
       const jitter = (Math.random() - 0.5) * 16;
       score += jitter;
 
@@ -1687,10 +1716,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 18. addLiveStreamHistory & fetchAllLiveStreamHistory
   if (endpoint === 'addLiveStreamHistory') {
     const userId = parseInt(fields.user_id);
+    let startedAt = fields.started_at;
+    if (!startedAt) {
+      startedAt = new Date().toISOString();
+    } else if (/^\d{1,2}:\d{2}/.test(startedAt.trim())) {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const parsed = new Date(`${todayStr} ${startedAt}`);
+        if (!isNaN(parsed.getTime())) {
+          startedAt = parsed.toISOString();
+        }
+      } catch (_) {}
+    }
     const newHistory: any = {
       id: getNextId(db.live_history),
       user_id: userId,
-      started_at: fields.started_at || new Date().toISOString(),
+      started_at: startedAt,
       streamed_for: fields.streamed_for || '00:10:00',
       amount_collected: parseInt(fields.amount_collected) || 0,
       created_at: new Date().toISOString(),
@@ -2007,54 +2048,96 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         .map((f) => f.user_id)
     );
 
-    // Algorithmic Feed Ranking (Instagram / Facebook logic)
+    // Algorithmic Feed Ranking (Production Instagram / Facebook Feed Model)
     const scoredPosts = postsWithDetails.map((p) => {
       let score = 0;
 
-      // 1. Social Graph / Following Affinity (+60 if followed creator, +25 if self)
-      if (followingIds.has(p.user_id)) {
-        score += 60;
-      } else if (p.user_id === currentUserId) {
-        score += 25;
+      const postTime = p.created_at ? new Date(p.created_at).getTime() : 0;
+      const hoursAgo = postTime > 0 ? Math.max(0, (Date.now() - postTime) / (1000 * 60 * 60)) : 100;
+
+      // 1. Fresh Post Exploration / Discovery Boost (FB/IG EdgeRank Freshness Boost)
+      // New posts receive strong discovery boost so every new post gets immediate visibility
+      if (hoursAgo < 1) {
+        score += 160; // Just posted: immediate top-of-feed boost
+      } else if (hoursAgo < 3) {
+        score += 120; // Very fresh
+      } else if (hoursAgo < 8) {
+        score += 70;  // Fresh
+      } else if (hoursAgo < 24) {
+        score += 35;  // Today
+      } else if (hoursAgo < 72) {
+        score += 15;  // Recent days
       }
 
-      // 2. Content Interest Matching (+25 per matched interest)
+      // 2. Creator Affinity & Social Graph (Instagram Relationship Factor)
+      const isCreatorFollowed = followingIds.has(p.user_id);
+      const isSelf = p.user_id === currentUserId;
+      if (isSelf) {
+        score += 150; // User immediately sees their own newly published content at top
+      } else if (isCreatorFollowed) {
+        score += 85;  // High priority for followed accounts
+      }
+
+      // 3. Content Interest & Topical Relevance (IG Interest Graph)
       const postInterests = String(p.interest_ids || '')
         .split(',')
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean);
-      const sharedCount = postInterests.filter((i) => myInterests.includes(i)).length;
-      score += sharedCount * 25;
+      const sharedInterests = postInterests.filter((i) => myInterests.includes(i));
+      score += sharedInterests.length * 30;
 
-      // Hashtag / keyword matching with user's interests
+      // Hashtag / Keyword matching
       const postHashtags = String(p.hashtags || '').toLowerCase();
+      const postDesc = String(p.description || '').toLowerCase();
       for (const interest of myInterests) {
-        if (interest.length > 2 && postHashtags.includes(interest)) {
-          score += 15;
+        if (interest.length > 2 && (postHashtags.includes(interest) || postDesc.includes(interest))) {
+          score += 20;
           break;
         }
       }
 
-      // 3. Engagement Signals
+      // 4. Engagement Velocity & Gravity Decay (HackerNews/Instagram Gravity Decay)
       const likes = p.likes_count || 0;
       const comments = p.comments_count || 0;
-      score += likes * 2 + comments * 3;
+      const rawEngagement = likes * 2.5 + comments * 5.0;
+      const gravityDecay = Math.pow(1 + hoursAgo / 8, 1.6);
+      const decayedEngagement = rawEngagement / gravityDecay;
+      score += decayedEngagement;
 
-      // 4. Recency & Time Decay
-      const postTime = p.created_at ? new Date(p.created_at).getTime() : 0;
-      const hoursAgo = postTime > 0 ? Math.max(0, (Date.now() - postTime) / (1000 * 60 * 60)) : 100;
-      const recencyBonus = Math.max(0, 45 - hoursAgo * 1.5);
-      score += recencyBonus;
+      // 5. Media Richness Signal (IG favors posts with video/multiple media)
+      const contentItems = p.content || [];
+      if (contentItems.some((c: any) => c.content_type === 1)) {
+        score += 25; // Video bonus
+      } else if (contentItems.length > 1) {
+        score += 15; // Carousel bonus
+      }
 
-      // 5. Dynamic refresh jitter (+/- 5 points) so pull-to-refresh displays fresh mix
-      const jitter = (Math.random() - 0.5) * 10;
+      // 6. Dynamic jitter (+/- 6 points) for natural variety on pull-to-refresh
+      const jitter = (Math.random() - 0.5) * 12;
       score += jitter;
 
       return { post: p, score };
     });
 
+    // Initial sort by ranking score
     scoredPosts.sort((a, b) => b.score - a.score);
-    const rankedPosts = scoredPosts.map((sp) => sp.post);
+
+    // 7. Author Diversity Interleaving (Instagram / FB Anti-Clustering Rule)
+    // Avoid showing consecutive posts by the same author in a row
+    const interleavedPosts: any[] = [];
+    const remainingPosts = [...scoredPosts];
+    let lastAuthorId: number | null = null;
+
+    while (remainingPosts.length > 0) {
+      let pickIndex = remainingPosts.findIndex((sp) => sp.post.user_id !== lastAuthorId);
+      if (pickIndex === -1) {
+        pickIndex = 0;
+      }
+      const [picked] = remainingPosts.splice(pickIndex, 1);
+      interleavedPosts.push(picked.post);
+      lastAuthorId = picked.post.user_id;
+    }
+    const rankedPosts = interleavedPosts;
 
     return jsonResponse({
       status: true,
@@ -2706,10 +2789,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       user.total_collected = (user.total_collected || 0) + amount;
       user.wallet = (user.wallet || 0) + amount;
     }
+    let startedAt2 = fields.started_at;
+    if (!startedAt2) {
+      startedAt2 = new Date().toISOString();
+    } else if (/^\d{1,2}:\d{2}/.test(startedAt2.trim())) {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const parsed = new Date(`${todayStr} ${startedAt2}`);
+        if (!isNaN(parsed.getTime())) {
+          startedAt2 = parsed.toISOString();
+        }
+      } catch (_) {}
+    }
     const newHistory: any = {
       id: getNextId(db.live_history || []),
       user_id: userId,
-      started_at: fields.started_at || new Date().toISOString(),
+      started_at: startedAt2,
       streamed_for: fields.streamed_for || '00:00:00',
       amount_collected: parseFloat(fields.amount_collected) || 0,
       created_at: new Date().toISOString(),

@@ -1091,18 +1091,24 @@ async function handleAction(request: NextRequest, action: string, method: string
 
   // 18. Settings: updateAppdata, changePassword, fetchChartData
   if (action === 'updateAppdata') {
-    const appdata = db.appdata[0];
-    if (appdata) {
-      Object.keys(fields).forEach((k) => {
-        if ((appdata as any)[k] !== undefined) {
-          (appdata as any)[k] = fields[k];
-        }
-      });
-      appdata.updated_at = new Date().toISOString();
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
+    let appdata = db.appdata[0];
+    if (!appdata) {
+      appdata = { id: 1 } as any;
+      db.appdata = [appdata];
     }
-    return jsonResponse({ status: false, message: 'Setting not found' });
+    Object.keys(fields).forEach((k) => {
+      if (k !== 'id') {
+        const val = fields[k];
+        if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val)) && k !== 'app_name' && k !== 'currency' && !k.includes('key') && !k.includes('token') && !k.includes('link') && !k.includes('id') && !k.includes('admob')) {
+          (appdata as any)[k] = Number(val);
+        } else {
+          (appdata as any)[k] = val;
+        }
+      }
+    });
+    appdata.updated_at = new Date().toISOString();
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
   }
 
   if (action === 'changePassword') {

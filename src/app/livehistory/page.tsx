@@ -10,6 +10,19 @@ export default function LiveHistoryPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const formatStartedAt = (val?: string) => {
+    if (!val) return 'N/A';
+    // If it's already a formatted time like "3:45 PM" or "15:45", return it directly
+    if (/^\d{1,2}:\d{2}(\s*(AM|PM|am|pm))?$/i.test(val.trim())) {
+      return val.trim();
+    }
+    const d = new Date(val);
+    if (isNaN(d.getTime())) {
+      return val;
+    }
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
   useEffect(() => {
     fetch('/fetchLiveHistory', { method: 'POST' })
       .then((r) => r.json())
@@ -113,7 +126,7 @@ export default function LiveHistoryPage() {
                           <div><strong>{h.user?.fullname || `User #${h.user_id}`}</strong></div>
                           <small className="text-muted">@{h.user?.username || 'N/A'}</small>
                         </td>
-                        <td>{h.started_at ? new Date(h.started_at).toLocaleTimeString() : 'N/A'}</td>
+                        <td>{formatStartedAt(h.started_at)}</td>
                         <td>{h.streamed_for || '00:10:00'}</td>
                         <td>{h.amount_collected || 0}</td>
                         <td>{h.created_at ? new Date(h.created_at).toLocaleDateString() : 'N/A'}</td>
