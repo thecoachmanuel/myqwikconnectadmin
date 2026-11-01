@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { getDb } from './db';
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,9 +38,19 @@ export async function uploadToCloudinaryIfConfigured(
   fileName: string,
   mimeType: string
 ): Promise<string | null> {
-  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-  const apiKey = process.env.CLOUDINARY_API_KEY;
-  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    try {
+      const db = await getDb();
+      const appdata = db.appdata?.[0];
+      cloudName = cloudName || appdata?.cloudinary_cloud_name;
+      apiKey = apiKey || appdata?.cloudinary_api_key;
+      apiSecret = apiSecret || appdata?.cloudinary_api_secret;
+    } catch (_) {}
+  }
 
   if (!cloudName || !apiKey || !apiSecret) {
     return null;
