@@ -502,7 +502,91 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
     }
 
-    const result = list.map((u) => {
+    // Extract current user attributes for personalization
+    const myInterests = String(currentUser?.interests || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const myGoals = String(currentUser?.relationship_goal_id || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const myCity = (currentUser?.city || '').trim().toLowerCase();
+    const myState = (currentUser?.state || '').trim().toLowerCase();
+    const myCountry = (currentUser?.country || '').trim().toLowerCase();
+    const myRel = String(currentUser?.religion_key || '').trim().toLowerCase();
+    const userLat = parseFloat(currentUser?.lattitude || currentUser?.latitude || '0');
+    const userLon = parseFloat(currentUser?.longitude || '0');
+    const hasUserCoords = !isNaN(userLat) && !isNaN(userLon) && (userLat !== 0 || userLon !== 0);
+
+    // Compute personalized match score for each candidate profile
+    const scoredList = list.map((u) => {
+      let score = 0;
+
+      // 1. Gender preference (+40)
+      if (currentUser?.gender_preferred && Number(currentUser.gender_preferred) !== 3) {
+        if (Number(u.gender) === Number(currentUser.gender_preferred)) {
+          score += 40;
+        }
+      }
+
+      // 2. Shared interests (+20 points per shared interest)
+      const theirInterests = String(u.interests || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const sharedInterests = theirInterests.filter((i) => myInterests.includes(i));
+      score += sharedInterests.length * 20;
+
+      // 3. Shared relationship goals (+35 points)
+      const theirGoals = String(u.relationship_goal_id || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const goalMatched = theirGoals.some((g) => myGoals.includes(g));
+      if (goalMatched) score += 35;
+
+      // 4. Religion match (+15 points)
+      if (myRel && String(u.religion_key || '').trim().toLowerCase() === myRel) {
+        score += 15;
+      }
+
+      // 5. Proximity & Location match
+      const uCity = (u.city || '').trim().toLowerCase();
+      const uState = (u.state || '').trim().toLowerCase();
+      const uCountry = (u.country || '').trim().toLowerCase();
+
+      if (myCity && uCity && myCity === uCity) score += 35;
+      else if (myState && uState && myState === uState) score += 20;
+      else if (myCountry && uCountry && myCountry === uCountry) score += 10;
+
+      if (hasUserCoords) {
+        const uLat = parseFloat(u.lattitude || u.latitude || '0');
+        const uLon = parseFloat(u.longitude || '0');
+        if (!isNaN(uLat) && !isNaN(uLon) && (uLat !== 0 || uLon !== 0)) {
+          const dist = getDistanceKm(userLat, userLon, uLat, uLon);
+          if (dist <= 25) score += 30;
+          else if (dist <= 75) score += 20;
+          else if (dist <= 200) score += 10;
+        }
+      }
+
+      // 6. Profile completeness & authenticity bonus
+      if (u.about && u.about.trim().length > 15) score += 10;
+      if (u.is_verified === 1 || u.is_verified === 2 || u.is_verified === 3) score += 20;
+
+      // 7. Dynamic shuffle jitter (+/- 8 points) so each refresh offers fresh variety while keeping relevance
+      const jitter = (Math.random() - 0.5) * 16;
+      score += jitter;
+
+      return { user: u, score };
+    });
+
+    // Sort descending by calculated personalization score
+    scoredList.sort((a, b) => b.score - a.score);
+    const sortedList = scoredList.map((item) => item.user);
+
+    const result = sortedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
       if (userImgs.length === 0) {
         userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
@@ -1211,96 +1295,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 12. getDiamondPacks
   
-  // 12a. paystack/initialize
-  if (endpoint === 'paystack/initialize' || endpoint === 'paystackInitialize') {
-    const email = fields.email?.toString() || 'user@orangeapp.com';
-    const amountNaira = parseFloat(fields.amount) || 1500;
-    const amountKobo = Math.round(amountNaira * 100);
-    const userId = parseInt(fields.user_id) || 0;
-    const planId = fields.plan_id?.toString() || '';
-    const type = fields.type?.toString() || 'diamond';
-    const diamonds = parseInt(fields.diamonds) || 0;
-    const months = parseInt(fields.months) || 1;
 
-    const secretKey =
-      process.env.PAYSTACK_SECRET_KEY ||
-      db.appdata[0]?.paystack_secret_key ||
-      '';
-
-    const reference = 'ORANGE_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-
-    if (secretKey && !secretKey.includes('test_orange_paystack')) {
-      try {
-        const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer ' + secretKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            email,
-            amount: amountKobo,
-            reference,
-            metadata: { user_id: userId, plan_id: planId, type, diamonds, months },
-          }),
-        });
-        const paystackData = await paystackRes.json();
-        if (paystackData.status) {
-          return jsonResponse({
-            status: true,
-            message: 'Paystack transaction initialized',
-            data: paystackData.data,
-          });
-        }
-      } catch (err) {
-        console.error('Paystack initialization error:', err);
-      }
-    }
-
-    return jsonResponse({
-      status: true,
-      message: 'Paystack checkout ready',
-      data: {
-        authorization_url: 'https://checkout.paystack.com/' + reference,
-        access_code: 'mock_code_' + reference,
-        reference,
-        amount: amountNaira,
-      },
-    });
-  }
-
-  // 12b. paystack/verify
-  if (endpoint === 'paystack/verify' || endpoint === 'paystackVerify') {
-    const reference = fields.reference?.toString() || '';
-    const userId = parseInt(fields.user_id) || 0;
-    const type = fields.type?.toString() || 'diamond';
-    const diamonds = parseInt(fields.diamonds) || 0;
-    const months = parseInt(fields.months) || 1;
-
-    const user = db.users.find((u) => u.id === userId);
-    if (!user) {
-      return jsonResponse({ status: false, message: 'User not found' }, 404);
-    }
-
-    if (type === 'diamond') {
-      const addedCoins = diamonds > 0 ? diamonds : 100;
-      user.wallet = (user.wallet || 0) + addedCoins;
-    } else if (type === 'subscription') {
-      user.is_verified = 3;
-      user.is_pro = 1;
-      const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + (months * 30));
-      user.pro_expire_date = expireDate.toISOString();
-    }
-
-    await commitDb(db);
-
-    return jsonResponse({
-      status: true,
-      message: 'Payment verified and credited successfully!',
-      data: user,
-    });
-  }
 
   // 12c. getAdminBadgeCounts
   if (endpoint === 'getAdminBadgeCounts') {
@@ -1542,11 +1537,16 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const user = db.users.find((u) => u.id === userId);
 
     if (user) {
-      if (endpoint === 'onOffNotification') user.is_notification = parseInt(fields.is_notification) || 0;
-      if (endpoint === 'onOffShowMeOnMap') user.show_on_map = parseInt(fields.show_on_map) || 0;
-      if (endpoint === 'onOffAnonymous') user.anonymous = parseInt(fields.anonymous) || 0;
-      if (endpoint === 'onOffVideoCalls') user.is_video_call = parseInt(fields.is_video_call) || 0;
-      if (endpoint === 'updateLiveStatus') user.is_live_now = parseInt(fields.is_live_now) || 0;
+      const stateVal = fields.state !== undefined
+        ? parseInt(fields.state)
+        : parseInt(fields.anonymous ?? fields.show_on_map ?? fields.is_notification ?? fields.is_video_call ?? fields.is_live_now);
+      const finalState = isNaN(stateVal) ? 0 : stateVal;
+
+      if (endpoint === 'onOffNotification') user.is_notification = finalState;
+      if (endpoint === 'onOffShowMeOnMap') user.show_on_map = finalState;
+      if (endpoint === 'onOffAnonymous') user.anonymous = finalState;
+      if (endpoint === 'onOffVideoCalls') user.is_video_call = finalState;
+      if (endpoint === 'updateLiveStatus') user.is_live_now = finalState;
 
       let userImgs = db.images.filter((img) => img.user_id === user.id);
       if (userImgs.length === 0) {
@@ -1995,12 +1995,73 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       })
       .filter((u) => (u.stories || []).length > 0);
 
+    const currentUser = db.users.find((u) => u.id === currentUserId);
+    const myInterests = String(currentUser?.interests || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    const followingIds = new Set(
+      (db.following_lists || [])
+        .filter((f) => f.my_user_id === currentUserId)
+        .map((f) => f.user_id)
+    );
+
+    // Algorithmic Feed Ranking (Instagram / Facebook logic)
+    const scoredPosts = postsWithDetails.map((p) => {
+      let score = 0;
+
+      // 1. Social Graph / Following Affinity (+60 if followed creator, +25 if self)
+      if (followingIds.has(p.user_id)) {
+        score += 60;
+      } else if (p.user_id === currentUserId) {
+        score += 25;
+      }
+
+      // 2. Content Interest Matching (+25 per matched interest)
+      const postInterests = String(p.interest_ids || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
+      const sharedCount = postInterests.filter((i) => myInterests.includes(i)).length;
+      score += sharedCount * 25;
+
+      // Hashtag / keyword matching with user's interests
+      const postHashtags = String(p.hashtags || '').toLowerCase();
+      for (const interest of myInterests) {
+        if (interest.length > 2 && postHashtags.includes(interest)) {
+          score += 15;
+          break;
+        }
+      }
+
+      // 3. Engagement Signals
+      const likes = p.likes_count || 0;
+      const comments = p.comments_count || 0;
+      score += likes * 2 + comments * 3;
+
+      // 4. Recency & Time Decay
+      const postTime = p.created_at ? new Date(p.created_at).getTime() : 0;
+      const hoursAgo = postTime > 0 ? Math.max(0, (Date.now() - postTime) / (1000 * 60 * 60)) : 100;
+      const recencyBonus = Math.max(0, 45 - hoursAgo * 1.5);
+      score += recencyBonus;
+
+      // 5. Dynamic refresh jitter (+/- 5 points) so pull-to-refresh displays fresh mix
+      const jitter = (Math.random() - 0.5) * 10;
+      score += jitter;
+
+      return { post: p, score };
+    });
+
+    scoredPosts.sort((a, b) => b.score - a.score);
+    const rankedPosts = scoredPosts.map((sp) => sp.post);
+
     return jsonResponse({
       status: true,
       message: 'Fetch posts',
       data: {
         users_stories: followingUsers,
-        posts: postsWithDetails,
+        posts: rankedPosts,
       },
     });
   }
