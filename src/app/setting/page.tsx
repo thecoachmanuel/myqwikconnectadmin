@@ -230,19 +230,39 @@ export default function SettingPage() {
                           name="paystack_public_key"
                           placeholder="pk_test_... or pk_live_..."
                           value={appdata.paystack_public_key || ''}
-                          onChange={(e) => setAppdata({ ...appdata, paystack_public_key: e.target.value })}
+                          onChange={(e) => setAppdata({ ...appdata, paystack_public_key: e.target.value.trim() })}
                         />
+                        <small className="form-text text-muted">Must start with <code>pk_live_</code> or <code>pk_test_</code></small>
                       </div>
                       <div className="form-group col-md-6">
                         <label>Paystack Secret Key</label>
                         <input
-                          type="password"
+                          type="text"
                           className="form-control"
                           name="paystack_secret_key"
                           placeholder="sk_test_... or sk_live_..."
                           value={appdata.paystack_secret_key || ''}
-                          onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value })}
+                          onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value.trim() })}
                         />
+                        <small className="form-text text-muted">Must start with <code>sk_live_</code> or <code>sk_test_</code> (Required for VIP subscriptions & Diamond purchases)</small>
+                      </div>
+                    </div>
+
+                    <div className="form-row mt-3">
+                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Google Maps API (Map Screen & Discovery)</h6></div>
+                      <div className="form-group col-md-12">
+                        <label>Google Maps API Key (Web, Android & iOS)</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          name="google_map_key"
+                          placeholder="AIzaSy..."
+                          value={appdata.google_map_key || ''}
+                          onChange={(e) => setAppdata({ ...appdata, google_map_key: e.target.value.trim() })}
+                        />
+                        <small className="form-text text-muted">
+                          Used to render Google Maps in the Orange app. Enable "Maps JavaScript API", "Maps SDK for Android", and "Maps SDK for iOS" in Google Cloud Console.
+                        </small>
                       </div>
                     </div>
 

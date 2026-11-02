@@ -5,6 +5,7 @@ import AdminLayout from '@/components/AdminLayout';
 import CountryStateCitySelect from '@/components/CountryStateCitySelect';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 function ViewUserContent() {
   const searchParams = useSearchParams();
@@ -213,19 +214,13 @@ function ViewUserContent() {
           <div className="form-row d-flex flex-wrap mb-3">
             {user.images && user.images.length > 0 ? (
               user.images.map((img: any) => {
-                const src = getImageUrl(img.image);
                 return (
                   <div key={img.id} className="position-relative mr-3 mb-2">
-                    <img
-                      src={src}
-                      alt=""
-                      width={130}
-                      height={130}
-                      className="rounded"
-                      style={{ objectFit: 'cover' }}
-                      onError={(e: any) => {
-                        e.currentTarget.src = '/asset/img/user.png';
-                      }}
+                    <UserAvatar
+                      src={img.image}
+                      name={user.fullname || 'Photo'}
+                      size={130}
+                      rounded={false}
                     />
                     <button
                       type="button"
@@ -240,13 +235,11 @@ function ViewUserContent() {
               })
             ) : (
               <div className="mr-3 mb-2 text-center">
-                <img
-                  src="/asset/img/user.png"
-                  alt="Empty Avatar"
-                  width={120}
-                  height={120}
-                  className="rounded-circle border"
-                  style={{ objectFit: 'cover', opacity: 0.8 }}
+                <UserAvatar
+                  src={null}
+                  name={user.fullname || user.username}
+                  size={120}
+                  rounded={false}
                 />
                 <div className="small text-muted mt-1">Empty avatar placeholder</div>
               </div>

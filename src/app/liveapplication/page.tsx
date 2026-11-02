@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import Link from 'next/link';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function LiveApplicationPage() {
   const [apps, setApps] = useState<any[]>([]);
@@ -113,16 +114,10 @@ export default function LiveApplicationPage() {
                     return (
                       <tr key={app.id}>
                         <td>
-                          <img
-                            src={avatarSrc}
-                            alt=""
-                            width={45}
-                            height={45}
-                            className="rounded-circle"
-                            style={{ objectFit: 'cover' }}
-                            onError={(e: any) => {
-                              e.currentTarget.src = '/asset/img/user.png';
-                            }}
+                          <UserAvatar
+                            src={app.user?.images && app.user.images[0]?.image}
+                            name={app.user?.fullname}
+                            size={45}
                           />
                         </td>
                         <td>

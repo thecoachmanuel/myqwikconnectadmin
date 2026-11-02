@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function LiveHistoryPage() {
   const [history, setHistory] = useState<any[]>([]);
@@ -110,16 +111,10 @@ export default function LiveHistoryPage() {
                     return (
                       <tr key={h.id}>
                         <td>
-                          <img
-                            src={avatarSrc}
-                            alt=""
-                            width={45}
-                            height={45}
-                            className="rounded-circle"
-                            style={{ objectFit: 'cover' }}
-                            onError={(e: any) => {
-                              e.currentTarget.src = '/asset/img/user.png';
-                            }}
+                          <UserAvatar
+                            src={h.user?.images && h.user.images[0]?.image}
+                            name={h.user?.fullname}
+                            size={45}
                           />
                         </td>
                         <td>

@@ -1358,14 +1358,29 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const diamonds = parseInt(fields.diamonds) || 0;
     const months = parseInt(fields.months) || 1;
 
-    const secretKey =
-      process.env.PAYSTACK_SECRET_KEY ||
+    let secretKey = (
       db.appdata[0]?.paystack_secret_key ||
-      '';
+      process.env.PAYSTACK_SECRET_KEY ||
+      ''
+    ).trim().replace(/^[\"']|[\"']$/g, '');
+    let publicKey = (
+      db.appdata[0]?.paystack_public_key ||
+      process.env.PAYSTACK_PUBLIC_KEY ||
+      ''
+    ).trim().replace(/^[\"']|[\"']$/g, '');
 
-    const isConfigured = secretKey && secretKey.trim() !== '' && !secretKey.includes('test_orange_paystack');
+    // Auto-swap if accidentally swapped in admin panel
+    if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) {
+      const temp = secretKey;
+      secretKey = publicKey;
+      publicKey = temp;
+    } else if (!secretKey.startsWith('sk_') && publicKey.startsWith('sk_')) {
+      secretKey = publicKey;
+    }
 
-    if (!isConfigured) {
+    const isDummy = !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack');
+
+    if (isDummy) {
       const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       return jsonResponse({
         status: true,
@@ -1375,6 +1390,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           reference: sandboxRef,
           access_code: 'sandbox_access_code',
         },
+      });
+    }
+
+    // If secret key still starts with pk_
+    if (secretKey.startsWith('pk_')) {
+      return jsonResponse({
+        status: false,
+        message: "Invalid Paystack Key Configuration: You entered a Public Key ('pk_...') in the Secret Key field. Paystack requires your Secret Key ('sk_live_...' or 'sk_test_...') in Admin Dashboard > Setting > Paystack.",
       });
     }
 
@@ -1408,9 +1431,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           data: paystackData.data,
         });
       } else {
+        const rawMsg = paystackData?.message || '';
+        let errorMsg = rawMsg || 'Paystack initialization failed. Please verify your Paystack keys in admin settings.';
+        if (rawMsg.toLowerCase().includes('key') || rawMsg.toLowerCase().includes('unauthorized')) {
+          errorMsg = `Paystack rejected your Secret Key (${rawMsg}). Please open Admin Dashboard > Setting and verify you have entered a valid live or test Paystack Secret Key (sk_live_... or sk_test_...) without quotes or spaces.`;
+        }
         return jsonResponse({
           status: false,
-          message: paystackData?.message || 'Paystack initialization failed. Please verify your Paystack keys in admin settings.',
+          message: errorMsg,
         });
       }
     } catch (err: any) {
@@ -1435,18 +1463,30 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       return jsonResponse({ status: false, message: 'User not found' }, 404);
     }
 
-    const secretKey =
-      process.env.PAYSTACK_SECRET_KEY ||
+    let secretKey = (
       db.appdata[0]?.paystack_secret_key ||
-      '';
+      process.env.PAYSTACK_SECRET_KEY ||
+      ''
+    ).trim().replace(/^[\"']|[\"']$/g, '');
+    let publicKey = (
+      db.appdata[0]?.paystack_public_key ||
+      process.env.PAYSTACK_PUBLIC_KEY ||
+      ''
+    ).trim().replace(/^[\"']|[\"']$/g, '');
 
-    const isConfigured = secretKey && secretKey.trim() !== '' && !secretKey.includes('test_orange_paystack');
+    if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) {
+      secretKey = publicKey;
+    } else if (!secretKey.startsWith('sk_') && publicKey.startsWith('sk_')) {
+      secretKey = publicKey;
+    }
+
+    const isDummy = !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack');
     const isSandboxRef = reference.startsWith('ORANGE_SANDBOX_');
 
-    if (!isConfigured && !isSandboxRef) {
+    if (isDummy && !isSandboxRef) {
       return jsonResponse({
         status: false,
-        message: 'Payment verification failed: Paystack secret key is not configured.',
+        message: 'Payment verification failed: Paystack secret key is not configured in Admin Settings.',
       });
     }
 
@@ -1469,7 +1509,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     let verified = false;
-    if (isSandboxRef || !isConfigured) {
+    if (isSandboxRef || isDummy) {
       verified = true;
     } else {
       try {
@@ -2610,18 +2650,31 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   if (endpoint === 'updateAppdata') {
-    const appdata = db.appdata[0];
-    if (appdata) {
-      Object.keys(fields).forEach((k) => {
-        if ((appdata as any)[k] !== undefined) {
-          (appdata as any)[k] = fields[k];
-        }
-      });
-      appdata.updated_at = new Date().toISOString();
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
+    let appdata = db.appdata[0];
+    if (!appdata) {
+      appdata = { id: 1 } as any;
+      db.appdata = [appdata];
     }
-    return jsonResponse({ status: false, message: 'Setting not found' });
+    Object.keys(fields).forEach((k) => {
+      if (k !== 'id') {
+        const val = fields[k];
+        if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val)) && k !== 'app_name' && k !== 'currency' && !k.includes('key') && !k.includes('token') && !k.includes('link') && !k.includes('id') && !k.includes('admob')) {
+          (appdata as any)[k] = Number(val);
+        } else {
+          (appdata as any)[k] = typeof val === 'string' ? val.trim() : val;
+        }
+      }
+    });
+    // Auto-swap Paystack keys if swapped
+    if (typeof appdata.paystack_secret_key === 'string' && appdata.paystack_secret_key.startsWith('pk_') &&
+        typeof appdata.paystack_public_key === 'string' && appdata.paystack_public_key.startsWith('sk_')) {
+      const temp = appdata.paystack_secret_key;
+      appdata.paystack_secret_key = appdata.paystack_public_key;
+      appdata.paystack_public_key = temp;
+    }
+    appdata.updated_at = new Date().toISOString();
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
   }
 
   // 32. generateAgoraToken
@@ -2685,7 +2738,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 34. Legal Pages (viewPrivacy, viewTerms, updatePrivacy, updateTerms)
   if (endpoint === 'viewPrivacy') {
-    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
@@ -2694,7 +2747,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   if (endpoint === 'viewTerms') {
-    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
@@ -2703,25 +2756,29 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   }
 
   if (endpoint === 'updatePrivacy') {
-    const p = db.pages[0];
-    if (p) {
-      p.privacy = fields.privacy || p.privacy;
-      if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Privacy policy updated' });
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
     }
-    return jsonResponse({ status: false, message: 'Pages not found' });
+    p.privacy = fields.privacy !== undefined ? fields.privacy : p.privacy;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Privacy policy updated', data: p });
   }
 
   if (endpoint === 'updateTerms') {
-    const p = db.pages[0];
-    if (p) {
-      p.termsofuse = fields.termsofuse || p.termsofuse;
-      if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Terms of use updated' });
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
     }
-    return jsonResponse({ status: false, message: 'Pages not found' });
+    p.termsofuse = fields.termsofuse !== undefined ? fields.termsofuse : p.termsofuse;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Terms of use updated', data: p });
   }
 
   // 35. getRandomProfile

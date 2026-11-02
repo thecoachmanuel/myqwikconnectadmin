@@ -4,6 +4,7 @@ import React, { useEffect, useState, Suspense } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 function ViewLiveApplicationContent() {
   const searchParams = useSearchParams();
@@ -103,23 +104,26 @@ function ViewLiveApplicationContent() {
           <div className="form-row mb-3 d-flex flex-wrap">
             {user.images && user.images.length > 0 ? (
               user.images.map((img: any) => {
-                const src = getImageUrl(img.image);
                 return (
-                  <img
+                  <UserAvatar
                     key={img.id}
-                    className="rounded mr-2 mb-2"
-                    src={src}
-                    width={130}
-                    height={130}
-                    style={{ objectFit: 'cover' }}
-                    onError={(e: any) => {
-                      e.currentTarget.src = '/asset/img/user.png';
-                    }}
+                    className="mr-2 mb-2"
+                    src={img.image}
+                    size={130}
+                    rounded={false}
                   />
                 );
               })
             ) : (
-              <p className="text-muted">No images available</p>
+              <div className="mr-3 mb-2 text-center">
+                <UserAvatar
+                  src={null}
+                  name={user.fullname || user.username}
+                  size={120}
+                  rounded={false}
+                />
+                <div className="small text-muted mt-1">Empty avatar placeholder</div>
+              </div>
             )}
           </div>
 

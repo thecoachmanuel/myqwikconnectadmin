@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function RedeemRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -171,16 +172,10 @@ export default function RedeemRequestsPage() {
                     return (
                       <tr key={r.id}>
                         <td>
-                          <img
-                            src={avatarSrc}
-                            alt=""
-                            width={45}
-                            height={45}
-                            className="rounded-circle"
-                            style={{ objectFit: 'cover' }}
-                            onError={(e: any) => {
-                              e.currentTarget.src = '/asset/img/user.png';
-                            }}
+                          <UserAvatar
+                            src={r.user?.images && r.user.images[0]?.image}
+                            name={r.user?.fullname}
+                            size={45}
                           />
                         </td>
                         <td>

@@ -1271,7 +1271,7 @@ async function handleAction(request: NextRequest, action: string, method: string
 
   // 19. Pages: viewPrivacy, viewTerms, updatePrivacy, updateTerms
   if (action === 'viewPrivacy') {
-    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
@@ -1280,7 +1280,7 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   if (action === 'viewTerms') {
-    const p = db.pages[0] || { id: 1, privacy: '', termsofuse: '' };
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
@@ -1289,23 +1289,29 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   if (action === 'updatePrivacy') {
-    const p = db.pages[0];
-    if (p) {
-      p.privacy = fields.privacy || p.privacy;
-      if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Privacy policy updated' });
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
     }
+    p.privacy = fields.privacy !== undefined ? fields.privacy : p.privacy;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).privacypolicy = p.privacy;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Privacy policy updated', data: p });
   }
 
   if (action === 'updateTerms') {
-    const p = db.pages[0];
-    if (p) {
-      p.termsofuse = fields.termsofuse || p.termsofuse;
-      if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
-      await commitDb(db);
-      return jsonResponse({ status: true, message: 'Terms of use updated' });
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
     }
+    p.termsofuse = fields.termsofuse !== undefined ? fields.termsofuse : p.termsofuse;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Terms of use updated', data: p });
   }
 
   // Generic fallback

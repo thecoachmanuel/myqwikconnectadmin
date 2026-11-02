@@ -2,6 +2,7 @@ import React from 'react';
 import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function TermsOfUsePage() {
   const db = await getDb();
@@ -133,8 +134,13 @@ export default async function TermsOfUsePage() {
               style={{
                 color: '#2D3748',
                 lineHeight: '1.85',
+                whiteSpace: content.includes('<') ? 'normal' : 'pre-wrap',
               }}
-              dangerouslySetInnerHTML={{ __html: content }}
+              dangerouslySetInnerHTML={{
+                __html: content.includes('<')
+                  ? content
+                  : content.replace(/\n\n/g, '<br/><br/>').replace(/\n/g, '<br/>'),
+              }}
             />
           ) : (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: '#718096' }}>

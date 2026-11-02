@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import Link from 'next/link';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([]);
@@ -325,16 +326,10 @@ export default function UsersPage() {
                     return (
                       <tr key={u.id}>
                         <td>
-                          <img
-                            src={avatarSrc}
-                            alt=""
-                            width={42}
-                            height={42}
-                            className="rounded-circle"
-                            style={{ objectFit: 'cover' }}
-                            onError={(e: any) => {
-                              e.currentTarget.src = '/asset/img/user.png';
-                            }}
+                          <UserAvatar
+                            src={u.images && u.images[0]?.image}
+                            name={u.fullname || u.username}
+                            size={42}
                           />
                         </td>
                         <td>

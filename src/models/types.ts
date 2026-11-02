@@ -35,6 +35,7 @@ export interface AppData {
   paystack_public_key?: string;
   paystack_secret_key?: string;
   paystack_enabled?: number;
+  google_map_key?: string;
   cloudinary_cloud_name?: string;
   cloudinary_api_key?: string;
   cloudinary_api_secret?: string;

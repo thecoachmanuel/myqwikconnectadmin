@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { getImageUrl } from '@/lib/image-helper';
+import UserAvatar from '@/components/UserAvatar';
 
 export default function ReportPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -169,16 +170,10 @@ export default function ReportPage() {
                         <tr key={rep.id}>
                           <td>
                             <Link href={`/viewuser?id=${rep.user_id}`}>
-                              <img
-                                src={avatarSrc}
-                                alt=""
-                                width={45}
-                                height={45}
-                                className="rounded-circle"
-                                style={{ objectFit: 'cover' }}
-                                onError={(e: any) => {
-                                  e.currentTarget.src = '/asset/img/user.png';
-                                }}
+                              <UserAvatar
+                                src={rep.user?.images && rep.user.images[0]?.image}
+                                name={rep.user?.fullname}
+                                size={45}
                               />
                             </Link>
                           </td>
