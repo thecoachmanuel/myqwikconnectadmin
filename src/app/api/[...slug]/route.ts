@@ -1964,24 +1964,51 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 21. getUserNotifications / getAdminNotifications
+  // 21. getUserNotifications / getAdminNotifications / markNotificationAsRead
   if (endpoint === 'getUserNotifications') {
     const userId = parseInt(fields.user_id);
-    const notifs = db.user_notification
+    const userNotifs = (db.user_notification || [])
       .filter((n) => n.user_id === userId)
-      .map((n) => {
-        const sender = db.users.find((u) => u.id === n.my_user_id);
-        const images = db.images.filter((i) => i.user_id === n.my_user_id);
-        return {
-          ...n,
-          user: sender ? { ...sender, images } : null,
-        };
-      });
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    // Deduplicate notifications
+    const seenIds = new Set();
+    const uniqueNotifs: typeof userNotifs = [];
+    for (const n of userNotifs) {
+      if (!seenIds.has(n.id)) {
+        seenIds.add(n.id);
+        uniqueNotifs.push(n);
+      }
+    }
+
+    const notifs = uniqueNotifs.map((n) => {
+      const sender = db.users.find((u) => u.id === n.my_user_id);
+      const images = db.images.filter((i) => i.user_id === n.my_user_id);
+      return {
+        ...n,
+        is_read: n.is_read !== undefined ? n.is_read : 0,
+        user: sender ? { ...sender, images } : null,
+      };
+    });
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
       data: notifs,
     });
+  }
+
+  if (endpoint === 'markNotificationAsRead' || endpoint === 'readNotification') {
+    const userId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    if (userId > 0 && db.user_notification) {
+      db.user_notification.forEach((n) => {
+        if (n.user_id === userId) {
+          n.is_read = 1;
+          n.updated_at = new Date().toISOString();
+        }
+      });
+      await commitDb(db);
+    }
+    return jsonResponse({ status: true, message: 'Notifications marked as read' });
   }
 
   if (endpoint === 'getAdminNotifications') {
@@ -2038,6 +2065,46 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     return jsonResponse({
       status: true,
       message: 'Action completed',
+    });
+  }
+
+  if (endpoint === 'fetchFollowingList' || endpoint === 'fetchFollowersList') {
+    const targetUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    const start = parseInt(fields.start) || 0;
+    const limit = parseInt(fields.limit) || 20;
+
+    const allRelations = db.following_lists || [];
+    let matchedUserIds: number[] = [];
+
+    if (endpoint === 'fetchFollowingList') {
+      matchedUserIds = allRelations
+        .filter((f) => f.my_user_id === targetUserId)
+        .map((f) => f.user_id);
+    } else {
+      matchedUserIds = allRelations
+        .filter((f) => f.user_id === targetUserId)
+        .map((f) => f.my_user_id);
+    }
+
+    const paginatedIds = matchedUserIds.slice(start, start + limit);
+    const resultUsers = paginatedIds
+      .map((id) => {
+        const u = db.users.find((user) => user.id === id);
+        if (!u) return null;
+        const userImgs = db.images.filter((img) => img.user_id === u.id);
+        const userStories = (db.stories || []).filter((s) => s.user_id === u.id);
+        return {
+          ...u,
+          images: userImgs,
+          stories: userStories,
+        };
+      })
+      .filter(Boolean);
+
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: resultUsers,
     });
   }
 
@@ -2284,19 +2351,54 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     // Save uploaded media files
     if (files && files.length > 0) {
-      files.forEach((f) => {
+      const contentType = parseInt(fields.content_type) || 0;
+      if (contentType === 1) {
+        // Video post: find video file and thumbnail file
+        const videoFile =
+          files.find((f) =>
+            f.fieldname.includes('content') ||
+            f.filename.endsWith('.mp4') ||
+            f.filename.endsWith('.mov') ||
+            f.filename.endsWith('.webm') ||
+            f.url.includes('video')
+          ) || files[0];
+
+        const thumbFile =
+          files.find((f) =>
+            f.fieldname.includes('thumbnail') ||
+            (f !== videoFile &&
+              (f.filename.endsWith('.jpg') ||
+                f.filename.endsWith('.png') ||
+                f.filename.endsWith('.webp') ||
+                f.filename.endsWith('.jpeg')))
+          ) || videoFile;
+
         const newContentId = getNextId(db.post_contents);
         db.post_contents.push({
           id: newContentId,
           post_id: newPostId,
-          content_type: parseInt(fields.content_type) || 0,
-          content: f.url,
-          thumbnail: f.url,
+          content_type: 1,
+          content: videoFile.url,
+          thumbnail: thumbFile.url,
           view_count: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
-      });
+      } else {
+        files.forEach((f) => {
+          const newContentId = getNextId(db.post_contents);
+          db.post_contents.push({
+            id: newContentId,
+            post_id: newPostId,
+            content_type: contentType,
+            content: f.url,
+            thumbnail: f.url,
+            view_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        });
+      }
     }
     await commitDb(db);
 
@@ -2596,23 +2698,44 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const msg = fields.message || fields;
       const token = msg.token || fields.token;
       const title = msg.notification?.title || msg.data?.title || fields.title || '';
-      if (token) {
-        const targetUser = db.users.find((u) => u.device_token === token);
-        if (targetUser && targetUser.is_notification !== 0) {
-          const senderUser = db.users.find((u) => u.fullname === title);
-          if (senderUser && senderUser.id !== targetUser.id) {
-            db.user_notification.push({
-              id: getNextId(db.user_notification),
-              my_user_id: senderUser.id,
-              user_id: targetUser.id,
-              item_id: senderUser.id,
-              type: 4,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            });
-            await commitDb(db);
-          }
+      const body = msg.notification?.body || msg.data?.body || fields.body || '';
+      const senderId = parseInt(fields.my_user_id || fields.sender_id || msg.my_user_id || msg.sender_id) || 0;
+      const targetUserId = parseInt(fields.target_user_id || fields.user_id || msg.target_user_id || msg.user_id) || 0;
+
+      let targetUser = targetUserId > 0 ? db.users.find((u) => u.id === targetUserId) : null;
+      if (!targetUser && token) {
+        targetUser = db.users.find((u) => u.device_token === token);
+      }
+
+      let senderUser = senderId > 0 ? db.users.find((u) => u.id === senderId) : null;
+      if (!senderUser && title) {
+        senderUser = db.users.find((u) => u.fullname?.toLowerCase() === title.toLowerCase());
+      }
+
+      if (targetUser && targetUser.is_notification !== 0 && senderUser && senderUser.id !== targetUser.id) {
+        db.user_notification = db.user_notification || [];
+        const existing = db.user_notification.find(
+          (n) => n.user_id === targetUser!.id && n.my_user_id === senderUser!.id && n.type === 4 && n.is_read === 0
+        );
+
+        if (existing) {
+          existing.message = body || 'Sent you a new message';
+          existing.updated_at = new Date().toISOString();
+        } else {
+          db.user_notification.push({
+            id: getNextId(db.user_notification),
+            my_user_id: senderUser.id,
+            user_id: targetUser.id,
+            item_id: senderUser.id,
+            title: senderUser.fullname || 'New Message',
+            message: body || 'Sent you a new message',
+            type: 4,
+            is_read: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
         }
+        await commitDb(db);
       }
     } catch (_) { }
     return jsonResponse({ status: true, message: 'Notification sent' });
