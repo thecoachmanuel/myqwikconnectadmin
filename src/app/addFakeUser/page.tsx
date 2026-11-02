@@ -8,15 +8,16 @@ import { useRouter } from 'next/navigation';
 export default function AddFakeUserPage() {
   const router = useRouter();
   const [fullname, setFullname] = useState('');
-  const [country, setCountry] = useState('United States');
-  const [state, setState] = useState('California');
-  const [city, setCity] = useState('Los Angeles');
-  const [dob, setDob] = useState('1998-06-15');
+  const [country, setCountry] = useState('Nigeria');
+  const [state, setState] = useState('Lagos');
+  const [city, setCity] = useState('Ikeja');
+  const [dob, setDob] = useState('2000-06-15');
   const [bio, setBio] = useState('Living life to the fullest.');
-  const [about, setAbout] = useState('Passionate explorer and photography fan.');
+  const [about, setAbout] = useState('Passionate explorer and connector.');
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('123456');
   const [gender, setGender] = useState('1');
+  const [isFake, setIsFake] = useState('0');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,7 @@ export default function AddFakeUserPage() {
     formData.append('username', `user_${Date.now()}`);
     formData.append('password', password);
     formData.append('gender', gender);
+    formData.append('is_fake', isFake);
 
     selectedFiles.forEach((file) => {
       formData.append('image[]', file);
@@ -219,6 +221,19 @@ export default function AddFakeUserPage() {
                 >
                   <option value="1">Male</option>
                   <option value="2">Female</option>
+                </select>
+              </div>
+              <div className="form-group col-md-4 col-sm-12">
+                <label>Account Type</label>
+                <select
+                  id="is_fake"
+                  className="form-control"
+                  value={isFake}
+                  onChange={(e) => setIsFake(e.target.value)}
+                  required
+                >
+                  <option value="0">Real User (Can log in to App)</option>
+                  <option value="1">Demo / Simulated User</option>
                 </select>
               </div>
             </div>

@@ -6,12 +6,13 @@ import { getDb } from './db';
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, apikey, apiKey, authorization, Accept, X-Requested-With',
+  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Max-Age': '86400',
 };
 
 export function handleCors() {
   return new NextResponse(null, {
-    status: 200,
+    status: 204,
     headers: corsHeaders,
   });
 }

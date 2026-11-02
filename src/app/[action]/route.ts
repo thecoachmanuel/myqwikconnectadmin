@@ -97,14 +97,24 @@ async function handleAction(request: NextRequest, action: string, method: string
     return response;
   }
 
-  // 3. fetchAllUsers / fetchStreamerUsers / fetchFakeUsers
-  if (action === 'fetchAllUsers' || action === 'fetchStreamerUsers' || action === 'fetchFakeUsers') {
-    let users = db.users;
+  // 3. fetchAllUsers / fetchStreamerUsers / fetchFakeUsers / fetchRealUsers
+  if (action === 'fetchAllUsers' || action === 'fetchStreamerUsers' || action === 'fetchFakeUsers' || action === 'fetchRealUsers') {
+    let users = [...db.users];
     if (action === 'fetchStreamerUsers') {
       users = users.filter((u) => u.can_go_live === 2);
     } else if (action === 'fetchFakeUsers') {
       users = users.filter((u) => u.is_fake === 1);
+    } else if (action === 'fetchRealUsers') {
+      users = users.filter((u) => u.is_fake !== 1);
     }
+
+    // Sort newest users first by created_at or id descending so admin immediately sees new signups!
+    users.sort((a, b) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+      return (b.id || 0) - (a.id || 0);
+    });
 
     const data = users.map((u) => ({
       ...u,
@@ -150,27 +160,35 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: false, message: 'User not found' });
   }
 
-  // 6. addCoinsToUserWalletFromAdmin
-  if (action === 'addCoinsToUserWalletFromAdmin') {
-    const userId = parseInt(fields.user_id);
-    const coins = parseInt(fields.coin) || 0;
+  // 6. addCoinsToUserWalletFromAdmin / adjustCoinsToUserWallet
+  if (action === 'addCoinsToUserWalletFromAdmin' || action === 'adjustCoinsToUserWallet') {
+    const userId = parseInt(fields.user_id || fields.id);
+    const coins = parseInt(fields.coin || fields.coins) || 0;
     const user = db.users.find((u) => u.id === userId);
     if (user) {
-      user.wallet = (user.wallet || 0) + coins;
-      user.total_collected = (user.total_collected || 0) + coins;
+      user.wallet = Math.max(0, (user.wallet || 0) + coins);
+      if (coins > 0) {
+        user.total_collected = (user.total_collected || 0) + coins;
+      }
       await commitDb(db);
       return jsonResponse({
         status: true,
-        message: 'Coins added successfully',
+        message: 'Wallet balance updated successfully',
         data: user,
       });
     }
     return jsonResponse({ status: false, message: 'User not found' });
   }
 
-  // 7. addFakeUserFromAdmin
-  if (action === 'addFakeUserFromAdmin') {
+  // 7. addFakeUserFromAdmin / adminCreateUser / createUserFromAdmin
+  if (action === 'addFakeUserFromAdmin' || action === 'adminCreateUser' || action === 'createUserFromAdmin') {
     const newId = getNextId(db.users);
+    const isFake = fields.is_fake !== undefined ? parseInt(fields.is_fake) : (action === 'addFakeUserFromAdmin' ? 1 : 0);
+    const email = (fields.identity || fields.email || `user_${newId}@orange.com`).toString().trim();
+    const rawPassword = (fields.password || '123456').toString().trim();
+    const appdata = db.appdata[0];
+    const initialWallet = fields.wallet !== undefined ? parseInt(fields.wallet) : (isFake === 1 ? 1000 : (appdata?.new_user_free_coins || 250));
+
     const newUser: any = {
       id: newId,
       is_block: 0,
@@ -178,35 +196,35 @@ async function handleAction(request: NextRequest, action: string, method: string
       savedprofile: '',
       likedprofile: '',
       interests: fields.interests || '',
-      identity: fields.identity || `fake_${newId}@orange.com`,
-      username: fields.username || `fake_user_${newId}`,
-      fullname: fields.fullname || 'User',
+      identity: email,
+      username: fields.username || `user_${newId}`,
+      fullname: fields.fullname || 'New User',
       instagram: fields.instagram || '',
       youtube: fields.youtube || '',
       facebook: fields.facebook || '',
-      country: fields.country || '',
-      state: fields.state || '',
-      city: fields.city || '',
+      country: fields.country || 'Nigeria',
+      state: fields.state || 'Lagos',
+      city: fields.city || 'Ikeja',
       bio: fields.bio || '',
       about: fields.about || '',
-      lattitude: fields.lattitude || '0.0',
-      longitude: fields.longitude || '0.0',
+      lattitude: fields.lattitude || '6.5244',
+      longitude: fields.longitude || '3.3792',
       login_type: 1,
       device_token: '',
       blocked_users: '',
-      wallet: 1000,
-      total_collected: 1000,
+      wallet: initialWallet,
+      total_collected: initialWallet,
       total_streams: 0,
       device_type: 1,
       is_notification: 1,
-      is_verified: 2,
+      is_verified: fields.is_verified !== undefined ? parseInt(fields.is_verified) : 1,
       show_on_map: 1,
       anonymous: 0,
       is_video_call: 1,
-      can_go_live: 2,
+      can_go_live: fields.can_go_live !== undefined ? parseInt(fields.can_go_live) : 2,
       is_live_now: 0,
-      is_fake: 1,
-      password: fields.password || '123456',
+      is_fake: isFake,
+      password: rawPassword,
       following: 0,
       followers: 0,
       gender_preferred: 3,
@@ -216,7 +234,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       relationship_goal_id: 1,
       religion_key: 1,
       language_keys: '1',
-      dob: fields.dob || '1998-01-01',
+      dob: fields.dob || '2000-01-01',
       hidden_user_ids: '',
       app_language: 'en',
       created_at: new Date().toISOString(),
@@ -237,7 +255,7 @@ async function handleAction(request: NextRequest, action: string, method: string
 
     return jsonResponse({
       status: true,
-      message: 'Fake user created successfully',
+      message: isFake === 1 ? 'Demo user created successfully' : 'User account created successfully',
       data: newUser,
     });
   }
