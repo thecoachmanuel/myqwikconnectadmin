@@ -87,22 +87,26 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 2. register
   if (endpoint === 'register') {
-    const identity = fields.identity?.toString() || '';
-    const fullname = fields.fullname?.toString() || 'New User';
+    const identity = fields.identity?.toString().trim() || '';
+    const fullname = fields.fullname?.toString().trim() || 'New User';
     const device_token = fields.device_token?.toString() || '';
     const device_type = parseInt(fields.device_type) || 1;
     const login_type = parseInt(fields.login_type) || 1;
     const firebase_uid = fields.firebase_uid?.toString() || '';
+    const password = fields.password?.toString().trim() || '';
 
-    let user = db.users.find((u) => u.identity === identity);
+    let user = db.users.find((u) => u.identity?.toLowerCase() === identity.toLowerCase());
+    let isNew = false;
 
     if (user) {
       user.device_token = device_token || user.device_token;
       user.device_type = device_type || user.device_type;
       if (firebase_uid) user.firebase_uid = firebase_uid;
+      if (password && !user.password) user.password = password;
       user.updated_at = new Date().toISOString();
       await commitDb(db);
     } else {
+      isNew = true;
       const appdata = db.appdata[0];
       const freeCoins = appdata?.new_user_free_coins || 250;
       const newId = getNextId(db.users);
@@ -114,7 +118,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         gender: 1,
         savedprofile: '',
         likedprofile: '',
-        interests: '1,2,3',
+        interests: '',
         identity,
         username,
         fullname,
@@ -122,17 +126,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         youtube: '',
         facebook: '',
         country: fields.country?.toString() || 'Nigeria',
-        state: fields.state?.toString() || 'Lagos',
-        city: fields.city?.toString() || 'Lagos',
-        bio: 'Ready to connect, share moments and meet exciting people on Orange!',
-        about: 'Passionate about culture, great music, lifestyle and genuine connections.',
+        state: fields.state?.toString() || '',
+        city: fields.city?.toString() || '',
+        bio: '',
+        about: '',
         lattitude: '6.5244',
         longitude: '3.3792',
         login_type,
         device_token,
         blocked_users: '',
         wallet: freeCoins,
-        total_collected: 0, // Free signup diamonds are spendable in wallet but cannot be withdrawn
+        total_collected: 0,
         total_streams: 0,
         device_type,
         is_notification: 1,
@@ -143,20 +147,21 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         can_go_live: 0,
         is_live_now: 0,
         is_fake: 0,
-        password: fields.password || '',
+        password: password,
         following: 0,
         followers: 0,
         gender_preferred: 2,
         age_preferred_min: 18,
         age_preferred_max: 50,
         distance_preference: 100,
-        relationship_goal_id: 1,
-        religion_key: 1,
-        language_keys: '1',
+        relationship_goal_id: 0,
+        religion_key: 0,
+        language_keys: '',
         dob: '2000-01-01',
         hidden_user_ids: '',
         app_language: 'en',
         firebase_uid,
+        is_profile_complete: 0,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         images: [],
@@ -167,38 +172,31 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     // Attach user images
     const userImages = db.images.filter((img) => img.user_id === user!.id);
-    if (userImages.length === 0) {
-      user.images = [{
-        id: (user!.id * 100) + 1,
-        user_id: user!.id,
-        image: 'uploads/nigerian_female_profile1.png',
-      }];
-    } else {
-      user.images = userImages;
-    }
+    user.images = userImages;
 
     return jsonResponse({
       status: true,
-      message: 'Registration successful',
+      message: isNew ? 'Registration successful' : 'Login successful',
+      is_new: isNew,
       data: user,
     });
   }
 
-  // 3. fakeUserLogin
-  if (endpoint === 'fakeUserLogin') {
-    const identity = fields.identity?.toString() || '';
-    const password = fields.password?.toString() || '';
+  // 3. fakeUserLogin / login
+  if (endpoint === 'fakeUserLogin' || endpoint === 'login') {
+    const identity = (fields.identity?.toString() || fields.email?.toString() || '').trim();
+    const password = (fields.password?.toString() || '').trim();
 
-    const user = db.users.find((u) => u.identity === identity);
+    const user = db.users.find((u) => u.identity?.toLowerCase() === identity.toLowerCase());
     if (!user) {
       return jsonResponse({
         status: false,
-        message: 'user not found!',
+        message: 'User not found. Please check your email or sign up.',
         data: null,
       });
     }
 
-    if (user.password && user.password !== password) {
+    if (user.password && password && user.password !== password) {
       return jsonResponse({
         status: false,
         message: 'Incorrect password combination',
@@ -209,9 +207,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (fields.device_token) user.device_token = fields.device_token.toString();
     if (fields.device_type) user.device_type = parseInt(fields.device_type) || user.device_type;
     user.images = db.images.filter((img) => img.user_id === user.id);
-    if (!user.images || user.images.length === 0) {
-      user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
-    }
     await commitDb(db);
 
     return jsonResponse({
@@ -317,7 +312,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       'lattitude', 'longitude', 'instagram', 'youtube', 'facebook', 'interests',
       'gender_preferred', 'age_preferred_min', 'age_preferred_max', 'distance_preference',
       'relationship_goal_id', 'religion_key', 'language_keys', 'dob', 'app_language',
-      'is_verified', 'is_notification', 'show_on_map', 'anonymous', 'is_video_call'
+      'is_verified', 'is_notification', 'show_on_map', 'anonymous', 'is_video_call', 'is_profile_complete'
     ];
 
     allowed.forEach((field) => {

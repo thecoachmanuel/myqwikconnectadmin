@@ -94,9 +94,12 @@ interface MongoGlobalCache {
 const globalCache: MongoGlobalCache = ((global as any).mongooseCached =
   (global as any).mongooseCached || { conn: null, promise: null });
 
+let mongoDisabledUntil = 0;
+
 export async function connectMongoDB(): Promise<typeof mongoose | null> {
   const uri = process.env.MONGODB_URI;
   if (!uri) return null;
+  if (Date.now() < mongoDisabledUntil) return null;
 
   if (globalCache.conn && mongoose.connection.readyState === 1) {
     return globalCache.conn;
@@ -107,8 +110,8 @@ export async function connectMongoDB(): Promise<typeof mongoose | null> {
     globalCache.promise = mongoose
       .connect(uri, {
         dbName,
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 2000,
+        connectTimeoutMS: 2000,
       })
       .then((m) => {
         console.log(`[MongoDB] Connected successfully to database '${m.connection.db?.databaseName || dbName}'`);
@@ -116,7 +119,8 @@ export async function connectMongoDB(): Promise<typeof mongoose | null> {
       })
       .catch((err) => {
         globalCache.promise = null;
-        console.error('[MongoDB] Connection error:', err.message);
+        mongoDisabledUntil = Date.now() + 60000;
+        console.error('[MongoDB] Connection error (backoff 60s):', err.message);
         return null as any;
       });
   }

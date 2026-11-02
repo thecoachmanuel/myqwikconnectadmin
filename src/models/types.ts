@@ -101,6 +101,7 @@ export interface User {
   hidden_user_ids: string;
   app_language: string;
   firebase_uid?: string;
+  is_profile_complete?: number;
   created_at: string;
   updated_at: string;
   images?: UserImage[];
