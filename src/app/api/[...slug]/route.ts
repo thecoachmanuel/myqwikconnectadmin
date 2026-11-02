@@ -272,7 +272,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const userData = {
       ...user,
       religion_key: String(user.religion_key || ''),
-      images: userImgs.length > 0 ? userImgs : [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }],
+      images: userImgs,
       stories: userStories,
       followingStatus: followingStatus,
       is_like: isLike,
@@ -336,9 +336,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     await commitDb(db);
 
     user.images = db.images.filter((img) => img.user_id === user.id);
-    if (!user.images || user.images.length === 0) {
-      user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
-    }
+    user.images = user.images || [];
 
     return jsonResponse({
       status: true,
@@ -408,9 +406,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const picked = list[Math.floor(Math.random() * list.length)];
     let userImgs = db.images.filter((img) => img.user_id === picked.id);
-    if (userImgs.length === 0) {
-      userImgs = [{ id: picked.id * 10, user_id: picked.id, image: 'uploads/user1.jpg' }];
-    }
+    userImgs = userImgs || [];
 
     const myUser = db.users.find((u) => u.id === currentUserId);
     const csvLikes = (myUser?.likedprofile || '').split(',').map((s) => s.trim());
@@ -628,9 +624,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const result = sortedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return {
         ...u,
         religion_key: String(u.religion_key || ''),
@@ -757,9 +751,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const paged = list.slice(start, start + limit);
     const result = paged.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return {
         ...u,
         religion_key: String(u.religion_key || ''),
@@ -802,9 +794,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const list = users.map((u, idx) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       const rawLat = parseFloat(u.lattitude || u.latitude || '0');
       const rawLon = parseFloat(u.longitude || '0');
       const baseLat = !isNaN(lat) && lat !== 0 ? lat : 21.2408;
@@ -847,9 +837,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const data = likedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return { ...u, images: userImgs, is_like: 1 };
     });
 
@@ -906,9 +894,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const data = savedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return { ...u, images: userImgs };
     });
 
@@ -964,9 +950,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const blockedList = db.users.filter((u) => blockedIds.includes(u.id));
     const data = blockedList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return { ...u, images: userImgs };
     });
 
@@ -1059,9 +1043,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const hiddenList = db.users.filter((u) => hiddenIds.includes(u.id)).slice(start, start + limit);
     const data = hiddenList.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return { ...u, images: userImgs };
     });
 
@@ -1117,7 +1099,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       user.updated_at = new Date().toISOString();
       user.images = db.images.filter((img) => img.user_id === user.id);
       if (user.images.length === 0) {
-        user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+        user.images = user.images || [];
       }
       await commitDb(db);
       return jsonResponse({
@@ -1140,7 +1122,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       user.updated_at = new Date().toISOString();
       user.images = db.images.filter((img) => img.user_id === user.id);
       if (user.images.length === 0) {
-        user.images = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
+        user.images = user.images || [];
       }
       await commitDb(db);
       return jsonResponse({
@@ -1635,9 +1617,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       if (endpoint === 'updateLiveStatus') user.is_live_now = finalState;
 
       let userImgs = db.images.filter((img) => img.user_id === user.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: user.id * 10, user_id: user.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       user.images = userImgs;
 
       await commitDb(db);
@@ -1909,9 +1889,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     const data = list.map((u) => {
       let userImgs = db.images.filter((img) => img.user_id === u.id);
-      if (userImgs.length === 0) {
-        userImgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
-      }
+      userImgs = userImgs || [];
       return {
         ...u,
         religion_key: String(u.religion_key || ''),
@@ -2029,7 +2007,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       .filter((u) => u.is_block === 0)
       .map((u) => {
         let imgs = db.images.filter((i) => i.user_id === u.id);
-        if (imgs.length === 0) imgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+        imgs = imgs || [];
         return {
           ...u,
           images: imgs,
@@ -2064,7 +2042,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const postUser = db.users.find((u) => u.id === p.user_id);
       let userImages = postUser ? db.images.filter((i) => i.user_id === postUser.id) : [];
       if (userImages.length === 0) {
-        userImages = [{ id: (postUser?.id || 1) * 10, user_id: postUser?.id || 1, image: 'uploads/user1.jpg' }];
+        userImages = [];
       }
       return {
         ...p,
@@ -2084,7 +2062,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       .filter((u) => u.is_block === 0)
       .map((u) => {
         let imgs = db.images.filter((i) => i.user_id === u.id);
-        if (imgs.length === 0) imgs = [{ id: u.id * 10, user_id: u.id, image: 'uploads/user1.jpg' }];
+        imgs = imgs || [];
         return {
           ...u,
           images: imgs,
@@ -2211,7 +2189,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const postUser = db.users.find((u) => u.id === p.user_id);
       let userImages = postUser ? db.images.filter((i) => i.user_id === postUser.id) : [];
       if (userImages.length === 0) {
-        userImages = [{ id: (postUser?.id || 1) * 10, user_id: postUser?.id || 1, image: 'uploads/user1.jpg' }];
+        userImages = [];
       }
       return {
         ...p,
@@ -2492,7 +2470,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         const postUser = db.users.find((u) => u.id === p.user_id);
         let userImages = postUser ? db.images.filter((i) => i.user_id === postUser.id) : [];
         if (userImages.length === 0) {
-          userImages = [{ id: (postUser?.id || 1) * 10, user_id: postUser?.id || 1, image: 'uploads/user1.jpg' }];
+          userImages = [];
         }
         return {
           ...p,
@@ -2762,7 +2740,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const randomUser = candidates[Math.floor(Math.random() * candidates.length)];
     let imgs = db.images.filter((img) => img.user_id === randomUser.id);
     if (imgs.length === 0) {
-      imgs = [{ id: randomUser.id * 10, user_id: randomUser.id, image: 'uploads/user1.jpg' }];
+      imgs = imgs || [];
     }
 
     return jsonResponse({

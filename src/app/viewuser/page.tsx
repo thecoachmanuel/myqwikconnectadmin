@@ -239,7 +239,17 @@ function ViewUserContent() {
                 );
               })
             ) : (
-              <p className="text-muted">No images uploaded.</p>
+              <div className="mr-3 mb-2 text-center">
+                <img
+                  src="/asset/img/user.png"
+                  alt="Empty Avatar"
+                  width={120}
+                  height={120}
+                  className="rounded-circle border"
+                  style={{ objectFit: 'cover', opacity: 0.8 }}
+                />
+                <div className="small text-muted mt-1">Empty avatar placeholder</div>
+              </div>
             )}
           </div>
 
