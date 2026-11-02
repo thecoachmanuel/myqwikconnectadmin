@@ -180,7 +180,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       interests: fields.interests || '',
       identity: fields.identity || `fake_${newId}@orange.com`,
       username: fields.username || `fake_user_${newId}`,
-      fullname: fields.fullname || 'Demo User',
+      fullname: fields.fullname || 'User',
       instagram: fields.instagram || '',
       youtube: fields.youtube || '',
       facebook: fields.facebook || '',

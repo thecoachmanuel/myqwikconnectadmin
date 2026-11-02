@@ -74,7 +74,7 @@
       "lattitude": "6.4541",
       "longitude": "3.6015",
       "login_type": 1,
-      "device_token": "web_token_demo",
+      "device_token": "web_token_active",
       "blocked_users": "",
       "wallet": 500,
       "total_collected": 500,
