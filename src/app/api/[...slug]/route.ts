@@ -2956,14 +2956,16 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       appdata.paystack_secret_key = appdata.paystack_public_key;
       appdata.paystack_public_key = temp;
     }
-    // Auto-disable sandbox mode when a real live Paystack secret key is saved
-    if (typeof appdata.paystack_secret_key === 'string' &&
-        (appdata.paystack_secret_key.startsWith('sk_live_') || appdata.paystack_secret_key.startsWith('sk_test_')) &&
-        appdata.paystack_secret_key.length > 25) {
-      // Only auto-disable if admin didn't explicitly set sandbox mode in this same request
-      if (!('paystack_sandbox_mode' in fields)) {
-        appdata.paystack_sandbox_mode = 0;
-      }
+    // Auto-disable sandbox mode when a real Paystack key is saved (sk_live_ or real sk_test_ key, not placeholder)
+    const savedSecretKey = (appdata.paystack_secret_key || '').toString().trim();
+    const isRealKey = (savedSecretKey.startsWith('sk_live_') || savedSecretKey.startsWith('sk_test_')) &&
+                       savedSecretKey.length > 25 &&
+                       !savedSecretKey.includes('orange_paystack') &&
+                       !savedSecretKey.includes('dummy') &&
+                       !savedSecretKey.includes('sandbox');
+    if (isRealKey) {
+      // Real key detected — always disable sandbox mode automatically
+      appdata.paystack_sandbox_mode = 0;
     }
     appdata.updated_at = new Date().toISOString();
     await commitDb(db);

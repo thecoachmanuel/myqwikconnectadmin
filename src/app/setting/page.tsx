@@ -327,17 +327,49 @@ export default function SettingPage() {
 
                     <div className="form-row mt-3">
                       <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Paystack Payment Gateway (Naira Real Payment)</h6></div>
+                      {/* Sandbox warning banner */}
+                      {(appdata.paystack_sandbox_mode === 1 || appdata.paystack_sandbox_mode === true) && (
+                        <div className="col-12 mb-2">
+                          <div className="alert alert-warning d-flex align-items-start mb-0" style={{ borderRadius: 8 }}>
+                            <i className="fas fa-exclamation-triangle mr-2 mt-1" style={{ fontSize: 16, flexShrink: 0 }}></i>
+                            <div>
+                              <strong>⚠️ Sandbox Mode is ON — No real payments will be processed.</strong>
+                              <br/>
+                              <span className="text-dark" style={{ fontSize: 13 }}>
+                                Users see a &quot;Demo Purchase&quot; dialog instead of real Paystack checkout.
+                                Enter your live keys below (<code>sk_live_...</code> / <code>pk_live_...</code>) and disable this toggle to accept real card payments.
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* Live key success banner */}
+                      {(appdata.paystack_sandbox_mode === 0 || appdata.paystack_sandbox_mode === false) &&
+                       typeof appdata.paystack_secret_key === 'string' &&
+                       appdata.paystack_secret_key.startsWith('sk_live_') &&
+                       appdata.paystack_secret_key.length > 25 && (
+                        <div className="col-12 mb-2">
+                          <div className="alert alert-success d-flex align-items-center mb-0" style={{ borderRadius: 8 }}>
+                            <i className="fas fa-check-circle mr-2" style={{ fontSize: 16 }}></i>
+                            <span><strong>✅ Live Mode Active</strong> — Real Paystack payments are enabled. Users will be charged real money.</span>
+                          </div>
+                        </div>
+                      )}
                       <div className="form-group col-md-6">
                         <label>Paystack Public Key</label>
                         <input
                           type="text"
                           className="form-control"
                           name="paystack_public_key"
-                          placeholder="pk_test_... or pk_live_..."
+                          placeholder="pk_live_... (for live) or pk_test_... (for test)"
                           value={appdata.paystack_public_key || ''}
-                          onChange={(e) => setAppdata({ ...appdata, paystack_public_key: e.target.value.trim() })}
+                          onChange={(e) => {
+                            const key = e.target.value.trim();
+                            const isLive = key.startsWith('pk_live_') && key.length > 25;
+                            setAppdata({ ...appdata, paystack_public_key: key, ...(isLive ? { paystack_sandbox_mode: 0 } : {}) });
+                          }}
                         />
-                        <small className="form-text text-muted">Must start with <code>pk_live_</code> or <code>pk_test_</code></small>
+                        <small className="form-text text-muted">Must start with <code>pk_live_</code> (live payments) or <code>pk_test_</code> (test mode)</small>
                       </div>
                       <div className="form-group col-md-6">
                         <label>Paystack Secret Key</label>
@@ -345,11 +377,20 @@ export default function SettingPage() {
                           type="text"
                           className="form-control"
                           name="paystack_secret_key"
-                          placeholder="sk_test_... or sk_live_..."
+                          placeholder="sk_live_... (for live) or sk_test_... (for test)"
                           value={appdata.paystack_secret_key || ''}
-                          onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value.trim() })}
+                          onChange={(e) => {
+                            const key = e.target.value.trim();
+                            const isLive = key.startsWith('sk_live_') && key.length > 25;
+                            // Auto-disable sandbox when a live key is typed
+                            setAppdata({ ...appdata, paystack_secret_key: key, ...(isLive ? { paystack_sandbox_mode: 0 } : {}) });
+                          }}
                         />
-                        <small className="form-text text-muted">Must start with <code>sk_live_</code> or <code>sk_test_</code> (Required for VIP subscriptions & Diamond purchases)</small>
+                        <small className="form-text text-muted">
+                          Must start with <code>sk_live_</code> or <code>sk_test_</code> — Get from{' '}
+                          <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" rel="noreferrer">dashboard.paystack.com</a>
+                          {' '}(Required for VIP subscriptions &amp; Diamond purchases)
+                        </small>
                       </div>
                       <div className="col-12 mt-1 mb-2">
                         <div className="custom-control custom-switch">
@@ -365,7 +406,8 @@ export default function SettingPage() {
                           </label>
                         </div>
                         <small className="form-text text-muted">
-                          When enabled, VIP subscriptions and diamond purchases in the Orange app can be tested immediately in demo mode. Disable this switch when using your live Paystack credentials.
+                          When enabled, VIP subscriptions and diamond purchases in the Orange app can be tested immediately in demo mode.{' '}
+                          <strong className="text-danger">Disable this switch when using your live Paystack credentials to accept real payments.</strong>
                         </small>
                       </div>
                       <div className="col-12 mt-2">
