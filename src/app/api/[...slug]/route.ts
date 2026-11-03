@@ -1443,20 +1443,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     const hasRealKey = (secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_')) && secretKey.length > 25 && !secretKey.includes('test_orange_paystack') && !secretKey.includes('dummy') && !secretKey.includes('sandbox');
-    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || process.env.PAYSTACK_SANDBOX_MODE === 'true';
-
-    if (isSandboxMode) {
-      const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      return jsonResponse({
-        status: true,
-        message: 'Paystack checkout sandbox initialized',
-        data: {
-          authorization_url: 'https://checkout.paystack.com',
-          reference: sandboxRef,
-          access_code: 'sandbox_access_code',
-        },
-      });
-    }
 
     if (!hasRealKey) {
       return jsonResponse({
@@ -1548,10 +1534,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     const hasRealKeyVerify = (secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_')) && secretKey.length > 25 && !secretKey.includes('test_orange_paystack') && !secretKey.includes('dummy') && !secretKey.includes('sandbox');
-    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || process.env.PAYSTACK_SANDBOX_MODE === 'true';
-    const isSandboxRef = reference.startsWith('ORANGE_SANDBOX_');
 
-    if (!isSandboxRef && !hasRealKeyVerify) {
+    if (!hasRealKeyVerify) {
       return jsonResponse({
         status: false,
         message: 'Payment verification failed: PAYSTACK_SECRET_KEY is not configured in environment variables (.env.local).',
@@ -1583,41 +1567,37 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     let paystackDiamonds: number = diamonds;
     let paystackMonths: number = months;
 
-    if (isSandboxRef || isSandboxMode) {
-      verified = true;
-    } else {
-      try {
-        const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-          headers: {
-            Authorization: `Bearer ${secretKey.trim()}`,
-          },
-        });
-        const paystackData = await paystackRes.json();
-        if (paystackData?.status === true && paystackData?.data?.status === 'success') {
-          verified = true;
-          // Extract metadata from Paystack response for resilient user lookup
-          paystackEmail = paystackData.data?.customer?.email || paystackData.data?.metadata?.email || null;
-          const metaUserId = parseInt(paystackData.data?.metadata?.user_id || '0') || 0;
-          if (metaUserId > 0) paystackUserId = metaUserId;
-          const metaType = paystackData.data?.metadata?.type?.toString();
-          if (metaType) paystackType = metaType;
-          const metaDiamonds = parseInt(paystackData.data?.metadata?.diamonds || '0') || 0;
-          if (metaDiamonds > 0) paystackDiamonds = metaDiamonds;
-          const metaMonths = parseInt(paystackData.data?.metadata?.months || '0') || 0;
-          if (metaMonths > 0) paystackMonths = metaMonths;
-        } else {
-          return jsonResponse({
-            status: false,
-            message: paystackData?.data?.gateway_response || paystackData?.message || 'Payment has not been completed on Paystack.',
-          });
-        }
-      } catch (err: any) {
-        console.error('Paystack verification error:', err);
+    try {
+      const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+        headers: {
+          Authorization: `Bearer ${secretKey.trim()}`,
+        },
+      });
+      const paystackData = await paystackRes.json();
+      if (paystackData?.status === true && paystackData?.data?.status === 'success') {
+        verified = true;
+        // Extract metadata from Paystack response for resilient user lookup
+        paystackEmail = paystackData.data?.customer?.email || paystackData.data?.metadata?.email || null;
+        const metaUserId = parseInt(paystackData.data?.metadata?.user_id || '0') || 0;
+        if (metaUserId > 0) paystackUserId = metaUserId;
+        const metaType = paystackData.data?.metadata?.type?.toString();
+        if (metaType) paystackType = metaType;
+        const metaDiamonds = parseInt(paystackData.data?.metadata?.diamonds || '0') || 0;
+        if (metaDiamonds > 0) paystackDiamonds = metaDiamonds;
+        const metaMonths = parseInt(paystackData.data?.metadata?.months || '0') || 0;
+        if (metaMonths > 0) paystackMonths = metaMonths;
+      } else {
         return jsonResponse({
           status: false,
-          message: 'Paystack verification network error: ' + err.message,
+          message: paystackData?.data?.gateway_response || paystackData?.message || 'Payment has not been completed on Paystack.',
         });
       }
+    } catch (err: any) {
+      console.error('Paystack verification error:', err);
+      return jsonResponse({
+        status: false,
+        message: 'Paystack verification network error: ' + err.message,
+      });
     }
 
     if (!verified) {
