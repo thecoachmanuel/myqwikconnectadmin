@@ -1384,21 +1384,29 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   // 19. Pages: viewPrivacy, viewTerms, updatePrivacy, updateTerms
-  if (action === 'viewPrivacy') {
+  if (action === 'viewPrivacy' || action === 'privacypolicy') {
     const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
+    const content = p.privacy || (db.appdata[0] as any)?.privacypolicy || '';
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
-      data: p,
+      data: {
+        privacy: content,
+        privacypolicy: content,
+      },
     });
   }
 
-  if (action === 'viewTerms') {
+  if (action === 'viewTerms' || action === 'termsOfUse' || action === 'termsofuse') {
     const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
+    const content = p.termsofuse || (db.appdata[0] as any)?.termsofuse || '';
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
-      data: p,
+      data: {
+        termsofuse: content,
+        terms: content,
+      },
     });
   }
 

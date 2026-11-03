@@ -59,6 +59,32 @@ export default function SettingPage() {
     }
   };
 
+  const handleEnableSandboxAndSave = async () => {
+    const updated = { ...appdata, paystack_sandbox_mode: 1 };
+    setAppdata(updated);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/updateSettingData', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      const data = await res.json();
+      if (data.status) {
+        setPaystackTestResult({
+          status: true,
+          message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards.',
+        });
+      } else {
+        alert(data.message || 'Error saving settings');
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/getSettingData')
       .then((res) => res.json())
@@ -297,14 +323,27 @@ export default function SettingPage() {
                           {testingPaystack ? 'Testing with Paystack...' : 'Test Paystack Keys'}
                         </button>
                         {paystackTestResult && (
-                          <span
-                            className={`badge p-2 ml-2 ${
-                              paystackTestResult.status ? 'badge-success' : 'badge-danger'
-                            }`}
-                            style={{ whiteSpace: 'normal', textAlign: 'left', display: 'inline-block' }}
-                          >
-                            {paystackTestResult.message}
-                          </span>
+                          <div className="mt-2 d-flex flex-wrap align-items-center">
+                            <span
+                              className={`badge p-2 ${
+                                paystackTestResult.status ? 'badge-success' : 'badge-danger'
+                              }`}
+                              style={{ whiteSpace: 'normal', textAlign: 'left', display: 'inline-block', maxWidth: '750px' }}
+                            >
+                              {paystackTestResult.message}
+                            </span>
+                            {!paystackTestResult.status && (
+                              <button
+                                type="button"
+                                className="btn btn-warning btn-sm ml-2 mt-1 font-weight-bold shadow-sm"
+                                onClick={handleEnableSandboxAndSave}
+                                disabled={loading}
+                              >
+                                <i className="fas fa-magic mr-1"></i>
+                                Enable Sandbox Mode & Save Now
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
