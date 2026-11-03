@@ -889,37 +889,31 @@ async function handleAction(request: NextRequest, action: string, method: string
       });
       const data = await res.json();
       if (res.ok && data.status) {
-        const mode = secretKey.startsWith('sk_live_') ? 'LIVE Mode' : 'TEST Mode';
-        return jsonResponse({
-          status: true,
-          message: `✓ Paystack Secret Key is VALID and ACTIVE! (${mode} connected successfully)`,
-        });
-      } else {
-        // Key rejected — auto-enable sandbox mode so the app keeps working
+        const mode = secretKey.startsWith('sk_live_') ? '🟢 LIVE Mode' : '🔵 TEST Mode';
+        // Valid key — ensure sandbox is OFF so real payments work
         try {
           if (db.appdata[0]) {
-            db.appdata[0].paystack_sandbox_mode = 1;
+            db.appdata[0].paystack_sandbox_mode = 0;
             db.appdata[0].updated_at = new Date().toISOString();
             await commitDb(db);
           }
         } catch (_) {}
         return jsonResponse({
           status: true,
-          message: `✓ Paystack Sandbox Mode is now ACTIVE! App payments, diamond top-ups, and VIP subscriptions will work in simulated demo mode. (Your entered key was rejected: ${data.message || 'Invalid key'}. When ready for live payments, paste your real Paystack sk_live_ key and disable sandbox mode.)`,
+          message: `✓ Paystack Secret Key is VALID and ACTIVE! (${mode} connected successfully). Sandbox mode has been automatically disabled — real payments are now enabled.`,
+        });
+      } else {
+        // Key rejected — report the error clearly, do NOT auto-enable sandbox
+        return jsonResponse({
+          status: false,
+          message: `❌ Paystack key rejected: ${data.message || 'Invalid key'}. Please check your key from dashboard.paystack.com and make sure it starts with sk_live_ or sk_test_.`,
         });
       }
     } catch (err: any) {
-      // Network error — auto-enable sandbox mode as fallback
-      try {
-        if (db.appdata[0]) {
-          db.appdata[0].paystack_sandbox_mode = 1;
-          db.appdata[0].updated_at = new Date().toISOString();
-          await commitDb(db);
-        }
-      } catch (_) {}
+      // Network error reaching Paystack — report it, do NOT auto-enable sandbox
       return jsonResponse({
-        status: true,
-        message: `✓ Paystack Sandbox Mode is now ACTIVE! (Could not reach Paystack servers: ${err.message}). Payments will work in simulated demo mode.`,
+        status: false,
+        message: `❌ Could not reach Paystack servers: ${err.message}. Check your internet connection and try again. Your key has NOT been changed.`,
       });
     }
   }
@@ -1250,13 +1244,31 @@ async function handleAction(request: NextRequest, action: string, method: string
         if (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val)) && k !== 'app_name' && k !== 'currency' && !k.includes('key') && !k.includes('token') && !k.includes('link') && !k.includes('id') && !k.includes('admob')) {
           (appdata as any)[k] = Number(val);
         } else {
-          (appdata as any)[k] = val;
+          (appdata as any)[k] = typeof val === 'string' ? val.trim() : val;
         }
       }
     });
+    // Auto-swap Paystack keys if accidentally swapped (pk_ in secret field, sk_ in public field)
+    if (typeof appdata.paystack_secret_key === 'string' && appdata.paystack_secret_key.startsWith('pk_') &&
+        typeof appdata.paystack_public_key === 'string' && appdata.paystack_public_key.startsWith('sk_')) {
+      const temp = appdata.paystack_secret_key;
+      appdata.paystack_secret_key = appdata.paystack_public_key;
+      appdata.paystack_public_key = temp;
+    }
+    // Auto-disable sandbox mode when a real Paystack key is saved (sk_live_ or real sk_test_)
+    const savedSecretKey = (appdata.paystack_secret_key || '').toString().trim();
+    const isRealKey = (savedSecretKey.startsWith('sk_live_') || savedSecretKey.startsWith('sk_test_')) &&
+                       savedSecretKey.length > 25 &&
+                       !savedSecretKey.includes('orange_paystack') &&
+                       !savedSecretKey.includes('dummy') &&
+                       !savedSecretKey.includes('sandbox');
+    if (isRealKey) {
+      // Real key detected — always disable sandbox mode automatically
+      appdata.paystack_sandbox_mode = 0;
+    }
     appdata.updated_at = new Date().toISOString();
     await commitDb(db);
-    return jsonResponse({ status: true, message: 'Settings updated successfully', data: appdata });
+    return jsonResponse({ status: true, message: 'Settings saved successfully!', data: appdata });
   }
 
   if (action === 'changePassword') {

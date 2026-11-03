@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+﻿import { NextRequest } from 'next/server';
 import { getDb, commitDb, getNextId } from '@/lib/db';
 import { corsHeaders, handleCors, jsonResponse, parseRequestBody, deleteFromCloudinary } from '@/lib/api-helper';
 import { User, UserImage, Post, PostContent, Comment, Story, Report } from '@/models/types';
@@ -3239,15 +3239,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       });
       const data = await res.json();
       if (res.ok && data.status) {
-        const mode = secretKey.startsWith('sk_live_') ? 'LIVE Mode' : 'TEST Mode';
+        const mode = secretKey.startsWith('sk_live_') ? '🟢 LIVE Mode' : '🔵 TEST Mode';
+        // Valid key - auto-disable sandbox immediately so real payments flow
+        try { if (db.appdata[0]) { db.appdata[0].paystack_sandbox_mode = 0; db.appdata[0].updated_at = new Date().toISOString(); await commitDb(db); } } catch (_) {}
         return jsonResponse({
           status: true,
-          message: `✓ Paystack Secret Key is VALID and ACTIVE! (${mode} connected successfully)`,
+          message: `✓ Paystack Key VALID! (${mode}). Sandbox disabled — real payments are now LIVE.`,
         });
       } else {
         return jsonResponse({
           status: false,
-          message: `✗ Paystack rejected this key: ${data.message || 'Invalid key'}. Please check dashboard.paystack.com > Settings > API Keys & Webhooks. Tip: Enable "Paystack Sandbox Mode" below to test payments right away.`,
+          message: `✗ Paystack key rejected: ${data.message || 'Invalid key'}. Check dashboard.paystack.com > Settings > API Keys & Webhooks.`,
         });
       }
     } catch (err: any) {
@@ -3265,4 +3267,3 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     data: [],
   });
 }
-

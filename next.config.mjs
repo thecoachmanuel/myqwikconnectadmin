@@ -70,6 +70,37 @@ const nextConfig = {
         source: '/public/:path*',
         destination: '/:path*',
       },
+      // Catch-all: any /:action POST/GET call that isn't a Next.js page or /api/ route
+      // gets transparently proxied to /api/:action so the Flutter app and admin panel
+      // can both call /updateAppdata, /changePassword, /testPaystackKey, etc. without /api/ prefix.
+      {
+        source: '/updateAppdata',
+        destination: '/api/updateAppdata',
+      },
+      {
+        source: '/changePassword',
+        destination: '/api/changePassword',
+      },
+      {
+        source: '/testPaystackKey',
+        destination: '/api/testPaystackKey',
+      },
+      {
+        source: '/updatePrivacy',
+        destination: '/api/updatePrivacy',
+      },
+      {
+        source: '/updateTerms',
+        destination: '/api/updateTerms',
+      },
+      {
+        source: '/viewPrivacy',
+        destination: '/api/viewPrivacy',
+      },
+      {
+        source: '/viewTerms',
+        destination: '/api/viewTerms',
+      },
     ];
   },
 };

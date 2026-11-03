@@ -69,7 +69,7 @@ export default function SettingPage() {
     setAppdata(updated);
     setLoading(true);
     try {
-      const res = await fetch('/api/updateSettingData', {
+      const res = await fetch('/api/updateAppdata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
@@ -106,7 +106,7 @@ export default function SettingPage() {
         if (d.data?.privacy) setLegalPrivacy(d.data.privacy);
         else if (d.data?.privacypolicy) setLegalPrivacy(d.data.privacypolicy);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     fetch('/viewTerms')
       .then((r) => r.json())
@@ -114,7 +114,7 @@ export default function SettingPage() {
         if (d.data?.termsofuse) setLegalTerms(d.data.termsofuse);
         else if (d.data?.terms) setLegalTerms(d.data.terms);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleSaveLegalPages = async (e: React.FormEvent) => {
@@ -326,7 +326,7 @@ export default function SettingPage() {
                     </div>
 
                     <div className="form-row mt-3">
-                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Paystack Payment Gateway (Naira Real Payment)</h6></div>
+                      <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Paystack Payment Gateway (Naira Real Payment)</h6></div>
                       {/* Sandbox warning banner */}
                       {(appdata.paystack_sandbox_mode === 1 || appdata.paystack_sandbox_mode === true) && (
                         <div className="col-12 mb-2">
@@ -334,7 +334,7 @@ export default function SettingPage() {
                             <i className="fas fa-exclamation-triangle mr-2 mt-1" style={{ fontSize: 16, flexShrink: 0 }}></i>
                             <div>
                               <strong>⚠️ Sandbox Mode is ON — No real payments will be processed.</strong>
-                              <br/>
+                              <br />
                               <span className="text-dark" style={{ fontSize: 13 }}>
                                 Users see a &quot;Demo Purchase&quot; dialog instead of real Paystack checkout.
                                 Enter your live keys below (<code>sk_live_...</code> / <code>pk_live_...</code>) and disable this toggle to accept real card payments.
@@ -345,16 +345,16 @@ export default function SettingPage() {
                       )}
                       {/* Live key success banner */}
                       {(appdata.paystack_sandbox_mode === 0 || appdata.paystack_sandbox_mode === false) &&
-                       typeof appdata.paystack_secret_key === 'string' &&
-                       appdata.paystack_secret_key.startsWith('sk_live_') &&
-                       appdata.paystack_secret_key.length > 25 && (
-                        <div className="col-12 mb-2">
-                          <div className="alert alert-success d-flex align-items-center mb-0" style={{ borderRadius: 8 }}>
-                            <i className="fas fa-check-circle mr-2" style={{ fontSize: 16 }}></i>
-                            <span><strong>✅ Live Mode Active</strong> — Real Paystack payments are enabled. Users will be charged real money.</span>
+                        typeof appdata.paystack_secret_key === 'string' &&
+                        appdata.paystack_secret_key.startsWith('sk_live_') &&
+                        appdata.paystack_secret_key.length > 25 && (
+                          <div className="col-12 mb-2">
+                            <div className="alert alert-success d-flex align-items-center mb-0" style={{ borderRadius: 8 }}>
+                              <i className="fas fa-check-circle mr-2" style={{ fontSize: 16 }}></i>
+                              <span><strong>✅ Live Mode Active</strong> — Real Paystack payments are enabled. Users will be charged real money.</span>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                       <div className="form-group col-md-6">
                         <label>Paystack Public Key</label>
                         <input
@@ -423,9 +423,8 @@ export default function SettingPage() {
                         {paystackTestResult && (
                           <div className="mt-2 d-flex flex-wrap align-items-center">
                             <span
-                              className={`badge p-2 ${
-                                paystackTestResult.status ? 'badge-success' : 'badge-danger'
-                              }`}
+                              className={`badge p-2 ${paystackTestResult.status ? 'badge-success' : 'badge-danger'
+                                }`}
                               style={{ whiteSpace: 'normal', textAlign: 'left', display: 'inline-block', maxWidth: '750px' }}
                             >
                               {paystackTestResult.message}
@@ -447,7 +446,7 @@ export default function SettingPage() {
                     </div>
 
                     <div className="form-row mt-3">
-                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Google Maps API (Map Screen & Discovery)</h6></div>
+                      <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Google Maps API (Map Screen & Discovery)</h6></div>
                       <div className="form-group col-md-12">
                         <label>Google Maps API Key (Web, Android & iOS)</label>
                         <input
@@ -465,7 +464,7 @@ export default function SettingPage() {
                     </div>
 
                     <div className="form-row mt-2">
-                      <div className="col-12"><hr/><h6 className="text-primary font-weight-bold">Cloudinary Media Storage (Feed & Chat Media)</h6></div>
+                      <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Cloudinary Media Storage (Feed & Chat Media)</h6></div>
                       <div className="form-group col-md-4">
                         <label>Cloud Name</label>
                         <input
@@ -652,7 +651,7 @@ export default function SettingPage() {
                             onChange={(e) => {
                               const val = e.target.checked ? 1 : 0;
                               setAppdata({ ...appdata, is_dating: val });
-                              fetch(`/changeFromDatingAppToLivestreamApp/${val}`).catch(() => {});
+                              fetch(`/changeFromDatingAppToLivestreamApp/${val}`).catch(() => { });
                             }}
                           />
                           <span className="slider round"></span>
@@ -668,7 +667,7 @@ export default function SettingPage() {
                             onChange={(e) => {
                               const val = e.target.checked ? 1 : 0;
                               setAppdata({ ...appdata, is_social_media: val });
-                              fetch(`/changeFromSocialMedia/${val}`).catch(() => {});
+                              fetch(`/changeFromSocialMedia/${val}`).catch(() => { });
                             }}
                           />
                           <span className="slider round"></span>
@@ -687,7 +686,7 @@ export default function SettingPage() {
                                 ...appdata,
                                 include_fake_user_in_matching: val,
                               });
-                              fetch(`/includeFakeUserInMatching/${val}`).catch(() => {});
+                              fetch(`/includeFakeUserInMatching/${val}`).catch(() => { });
                             }}
                           />
                           <span className="slider round"></span>
@@ -710,7 +709,7 @@ export default function SettingPage() {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ web_mobile_view: val }),
-                              }).catch(() => {});
+                              }).catch(() => { });
                             }}
                           />
                           <span className="slider round"></span>
