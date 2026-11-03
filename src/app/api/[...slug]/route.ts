@@ -1411,7 +1411,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   // 12a. paystack/initialize
   if (endpoint === 'paystack/initialize' || endpoint === 'paystackInitialize') {
-    const email = fields.email?.toString() || 'user@orangeapp.com';
+    let email = (fields.email || fields.identity || '').toString().trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      const uId = fields.user_id ? String(fields.user_id) : String(Date.now());
+      email = `user_${uId}@gmail.com`;
+    }
     const amountNaira = parseFloat(fields.amount) || 1500;
     const amountKobo = Math.round(amountNaira * 100);
     const userId = parseInt(fields.user_id) || 0;
@@ -1493,6 +1498,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           data: {
             ...paystackData.data,
             public_key: publicKey,
+            email: email,
           },
         });
       } else {
