@@ -198,7 +198,14 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
 
             let targetPath = '';
             let relPath = `uploads/${uniqueName}`;
-            const mimeType = value.type || (ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : ext === '.mp4' ? 'video/mp4' : 'image/jpeg');
+            const videoExts = ['.mp4', '.mov', '.webm', '.avi', '.m4v', '.3gp', '.mkv'];
+            const lowerExt = ext.toLowerCase();
+            const isVideo = videoExts.includes(lowerExt) || (value.type && value.type.startsWith('video/'));
+            const mimeType = value.type || (
+              isVideo
+                ? (lowerExt === '.webm' ? 'video/webm' : lowerExt === '.mov' ? 'video/quicktime' : lowerExt === '.3gp' ? 'video/3gpp' : lowerExt === '.avi' ? 'video/x-msvideo' : 'video/mp4')
+                : (lowerExt === '.png' ? 'image/png' : lowerExt === '.gif' ? 'image/gif' : lowerExt === '.webp' ? 'image/webp' : 'image/jpeg')
+            );
 
             // Try Cloudinary first if credentials configured
             const cloudUrl = await uploadToCloudinaryIfConfigured(buffer, uniqueName, mimeType);

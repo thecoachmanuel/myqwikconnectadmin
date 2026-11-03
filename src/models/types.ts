@@ -35,6 +35,7 @@ export interface AppData {
   paystack_public_key?: string;
   paystack_secret_key?: string;
   paystack_enabled?: number;
+  paystack_sandbox_mode?: number;
   google_map_key?: string;
   cloudinary_cloud_name?: string;
   cloudinary_api_key?: string;
@@ -191,6 +192,7 @@ export interface Report {
   reported_by?: number | null;
   reason: string;
   description: string;
+  status?: number;
   created_at: string;
   updated_at: string;
   user?: User;
@@ -228,6 +230,7 @@ export interface Comment {
   user_id: number;
   post_id: number;
   description: string;
+  status?: number;
   created_at: string;
   updated_at: string;
   user?: User;
@@ -251,6 +254,7 @@ export interface OnboardingScreen {
   image: string;
   title: string;
   description: string;
+  status?: number;
   created_at: string;
   updated_at: string;
 }

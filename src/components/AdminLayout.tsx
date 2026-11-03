@@ -24,6 +24,35 @@ export default function AdminLayout({
     pendingReports: 0,
     totalPending: 0,
   });
+  const [readNotifCount, setReadNotifCount] = useState(0);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('admin_read_notif_count');
+      if (saved !== null) {
+        setReadNotifCount(parseInt(saved) || 0);
+      }
+    } catch (_) {}
+  }, []);
+
+  const markAllAsRead = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setReadNotifCount(badgeCounts.totalPending);
+    try {
+      localStorage.setItem('admin_read_notif_count', badgeCounts.totalPending.toString());
+    } catch (_) {}
+  };
+
+  const handleToggleNotif = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const nextState = !notifOpen;
+    setNotifOpen(nextState);
+    if (nextState) {
+      markAllAsRead();
+    }
+  };
+
+  const unreadCount = Math.max(0, badgeCounts.totalPending - readNotifCount);
 
   useEffect(() => {
     fetch('/api/getAdminBadgeCounts')
@@ -170,15 +199,12 @@ export default function AdminLayout({
               <a
                 href="#"
                 data-toggle="dropdown"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setNotifOpen(!notifOpen);
-                }}
+                onClick={handleToggleNotif}
                 className="nav-link notification-toggle nav-link-lg"
                 style={{ position: 'relative' }}
               >
                 <i className="far fa-bell" style={{ fontSize: '18px' }}></i>
-                {badgeCounts.totalPending > 0 && (
+                {unreadCount > 0 && (
                   <span
                     className="badge badge-danger"
                     style={{
@@ -190,17 +216,29 @@ export default function AdminLayout({
                       borderRadius: '10px',
                     }}
                   >
-                    {badgeCounts.totalPending}
+                    {unreadCount}
                   </span>
                 )}
               </a>
               <div
                 className={`dropdown-menu dropdown-list dropdown-menu-right pullDown ${notifOpen ? 'show' : ''}`}
-                style={{ display: notifOpen ? 'block' : 'none', minWidth: '300px' }}
+                style={{ display: notifOpen ? 'block' : 'none', minWidth: '320px' }}
               >
                 <div className="dropdown-header font-weight-bold d-flex justify-content-between align-items-center">
                   <span>Platform Notifications</span>
-                  <span className="badge badge-primary">{badgeCounts.totalPending} pending</span>
+                  <div className="d-flex align-items-center">
+                    <span className="badge badge-primary mr-2">{badgeCounts.totalPending} pending</span>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllAsRead}
+                        className="btn btn-sm btn-link p-0 text-primary"
+                        style={{ fontSize: '11px', textDecoration: 'underline' }}
+                      >
+                        Mark read
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="dropdown-list-content">
                   {badgeCounts.pendingVerification > 0 && (

@@ -45,7 +45,10 @@ export default function SettingPage() {
       const res = await fetch('/testPaystackKey', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ secret_key: appdata.paystack_secret_key }),
+        body: JSON.stringify({
+          secret_key: appdata.paystack_secret_key,
+          paystack_sandbox_mode: appdata.paystack_sandbox_mode,
+        }),
       });
       const data = await res.json();
       setPaystackTestResult(data);
@@ -265,6 +268,23 @@ export default function SettingPage() {
                           onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value.trim() })}
                         />
                         <small className="form-text text-muted">Must start with <code>sk_live_</code> or <code>sk_test_</code> (Required for VIP subscriptions & Diamond purchases)</small>
+                      </div>
+                      <div className="col-12 mt-1 mb-2">
+                        <div className="custom-control custom-switch">
+                          <input
+                            type="checkbox"
+                            className="custom-control-input"
+                            id="paystackSandboxSwitch"
+                            checked={appdata.paystack_sandbox_mode === 1 || appdata.paystack_sandbox_mode === true}
+                            onChange={(e) => setAppdata({ ...appdata, paystack_sandbox_mode: e.target.checked ? 1 : 0 })}
+                          />
+                          <label className="custom-control-label font-weight-bold text-dark" htmlFor="paystackSandboxSwitch">
+                            Paystack Sandbox / Demo Mode (Simulate payments instantly without real credentials)
+                          </label>
+                        </div>
+                        <small className="form-text text-muted">
+                          When enabled, VIP subscriptions and diamond purchases in the Orange app can be tested immediately in demo mode. Disable this switch when using your live Paystack credentials.
+                        </small>
                       </div>
                       <div className="col-12 mt-2">
                         <button

@@ -777,19 +777,26 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const lat = parseFloat(fields.lat || fields.latitude);
     const lon = parseFloat(fields.long || fields.longitude);
     const km = parseFloat(fields.km) || 500;
+    const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
 
-    let users = db.users.filter((u) => u.is_block === 0 && u.show_on_map !== 0 && u.anonymous !== 1);
+    let users = db.users.filter((u) => u.is_block === 0 && u.show_on_map !== 0 && u.anonymous !== 1 && u.id !== currentUserId);
 
-    if (!isNaN(lat) && !isNaN(lon)) {
-      const nearby = users.filter((u) => {
+    if (!isNaN(lat) && !isNaN(lon) && (lat !== 0 || lon !== 0)) {
+      users = users.filter((u) => {
         const uLat = parseFloat(u.lattitude || u.latitude || '0');
         const uLon = parseFloat(u.longitude || '0');
         if (isNaN(uLat) || isNaN(uLon) || (uLat === 0 && uLon === 0)) return false;
         return getDistanceKm(lat, lon, uLat, uLon) <= km;
       });
-      if (nearby.length > 0) {
-        users = nearby;
-      }
+
+      // Sort users by proximity (closest first)
+      users.sort((a, b) => {
+        const aLat = parseFloat(a.lattitude || a.latitude || '0');
+        const aLon = parseFloat(a.longitude || '0');
+        const bLat = parseFloat(b.lattitude || b.latitude || '0');
+        const bLon = parseFloat(b.longitude || '0');
+        return getDistanceKm(lat, lon, aLat, aLon) - getDistanceKm(lat, lon, bLat, bLon);
+      });
     }
 
     const list = users.map((u, idx) => {
@@ -797,10 +804,11 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       userImgs = userImgs || [];
       const rawLat = parseFloat(u.lattitude || u.latitude || '0');
       const rawLon = parseFloat(u.longitude || '0');
-      const baseLat = !isNaN(lat) && lat !== 0 ? lat : 21.2408;
-      const baseLon = !isNaN(lon) && lon !== 0 ? lon : 72.8806;
-      const assignedLat = rawLat !== 0 ? rawLat.toString() : (baseLat + (idx % 2 === 0 ? 1 : -1) * 0.005 * (idx + 1)).toFixed(6);
-      const assignedLon = rawLon !== 0 ? rawLon.toString() : (baseLon + (idx % 3 === 0 ? 1 : -1) * 0.005 * (idx + 1)).toFixed(6);
+      const assignedLat = rawLat !== 0 ? rawLat.toString() : '6.5244';
+      const assignedLon = rawLon !== 0 ? rawLon.toString() : '3.3792';
+      const distance = (!isNaN(lat) && !isNaN(lon) && rawLat !== 0 && rawLon !== 0)
+        ? Math.round(getDistanceKm(lat, lon, rawLat, rawLon) * 10) / 10
+        : undefined;
 
       return {
         ...u,
@@ -809,6 +817,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         longitude: assignedLon,
         religion_key: String(u.religion_key || ''),
         images: userImgs,
+        distance_km: distance,
       };
     });
 
@@ -1324,7 +1333,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const pendingVerification = (db.verification_request || []).filter((v) => v.status === 0).length;
     const pendingLive = (db.live_application || []).filter((l) => l.status === 0).length;
     const pendingRedeem = (db.redeem_requests || []).filter((r) => r.status === 0).length;
-    const pendingReports = (db.reports || []).length;
+    const pendingReports = (db.reports || []).filter((r) => r.status === 0 || !r.status).length;
     const totalPending = pendingVerification + pendingLive + pendingRedeem + pendingReports;
 
     return jsonResponse({
@@ -1388,12 +1397,15 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey = publicKey;
     }
 
+    const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
     const isDummy =
+      isSandboxMode ||
       !secretKey ||
       secretKey === '' ||
       secretKey.includes('test_orange_paystack') ||
       secretKey.includes('dummy') ||
-      secretKey.includes('sandbox');
+      secretKey.includes('sandbox') ||
+      secretKey.length < 25;
 
     if (isDummy) {
       const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1499,7 +1511,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey = publicKey;
     }
 
-    const isDummy = !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack');
+    const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
+    const isDummy = isSandboxMode || !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack') || secretKey.length < 25;
     const isSandboxRef = reference.startsWith('ORANGE_SANDBOX_');
 
     if (isDummy && !isSandboxRef) {
@@ -2442,6 +2455,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
             f.filename.endsWith('.mp4') ||
             f.filename.endsWith('.mov') ||
             f.filename.endsWith('.webm') ||
+            f.filename.endsWith('.m4v') ||
+            f.filename.endsWith('.3gp') ||
+            f.filename.endsWith('.avi') ||
             f.url.includes('video')
           ) || files[0];
 
@@ -3104,10 +3120,19 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       .replace(/^["'`]|["'`]$/g, '')
       .trim();
 
-    if (!secretKey) {
+    const isSandboxMode = fields.paystack_sandbox_mode === 1 || fields.paystack_sandbox_mode === '1' || db.appdata[0]?.paystack_sandbox_mode === 1;
+
+    const isPlaceholder =
+      !secretKey ||
+      secretKey.includes('test_orange_paystack') ||
+      secretKey.includes('sandbox') ||
+      secretKey.includes('dummy') ||
+      secretKey.length < 25;
+
+    if (isSandboxMode || isPlaceholder) {
       return jsonResponse({
-        status: false,
-        message: 'Please enter a Paystack Secret Key first.',
+        status: true,
+        message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards. (When ready for real payments, paste your real secret key from dashboard.paystack.com).',
       });
     }
 
@@ -3119,20 +3144,28 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     try {
-      const res = await fetch('https://api.paystack.co/balance', {
-        headers: { Authorization: `Bearer ${secretKey}` },
+      const res = await fetch('https://api.paystack.co/transaction/initialize', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: 'test@orangeapp.com',
+          amount: 10000,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.status) {
-        const balances = (data.data || []).map((b: any) => `${b.currency}: ${(b.balance / 100).toLocaleString()}`).join(', ');
+        const mode = secretKey.startsWith('sk_live_') ? 'LIVE Mode' : 'TEST Mode';
         return jsonResponse({
           status: true,
-          message: `✓ Paystack Secret Key is VALID and ACTIVE! Balance (${balances || 'Connected'})`,
+          message: `✓ Paystack Secret Key is VALID and ACTIVE! (${mode} connected successfully)`,
         });
       } else {
         return jsonResponse({
           status: false,
-          message: `✗ Paystack rejected this key: ${data.message || 'Unauthorized / Invalid key'}. Please check dashboard.paystack.com > Settings > API Keys & Webhooks.`,
+          message: `✗ Paystack rejected this key: ${data.message || 'Invalid key'}. Please check dashboard.paystack.com > Settings > API Keys & Webhooks. Tip: Enable "Paystack Sandbox Mode" below to test payments right away.`,
         });
       }
     } catch (err: any) {
