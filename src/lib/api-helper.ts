@@ -230,8 +230,21 @@ export async function parseRequestBody(request: Request): Promise<{ fields: Reco
               } catch {}
             }
 
-            if (!isFsWritable && (process.env.VERCEL || buffer.length <= 4 * 1024 * 1024)) {
-              relPath = `data:${mimeType};base64,${buffer.toString('base64')}`;
+            if (!isFsWritable) {
+              if (isVideo) {
+                // Videos cannot be served as inline base64 — too large for the 4.5 MB Vercel body
+                // limit and not playable in <video> tags reliably.  We keep relPath as the plain
+                // filename so the caller gets an empty/broken URL and can show a proper error
+                // message rather than crashing.  Configure CLOUDINARY_* env vars to fix uploads.
+                relPath = '';
+              } else if (buffer.length <= 1 * 1024 * 1024) {
+                // Images ≤ 1 MB are fine as inline base64
+                relPath = `data:${mimeType};base64,${buffer.toString('base64')}`;
+              } else {
+                // Large image with no Cloudinary — store relPath as the filename; it will 404
+                // but won't crash.  Admin should configure Cloudinary for large files.
+                relPath = '';
+              }
             }
 
             files.push({

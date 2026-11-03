@@ -38,6 +38,11 @@ export default function SettingPage() {
   const [testingPaystack, setTestingPaystack] = useState(false);
   const [paystackTestResult, setPaystackTestResult] = useState<{ status: boolean; message: string } | null>(null);
 
+  // Legal pages state (loaded for quick-view; full editing is at /viewPrivacy and /viewTerms)
+  const [legalPrivacy, setLegalPrivacy] = useState('');
+  const [legalTerms, setLegalTerms] = useState('');
+  const [legalLoading, setLegalLoading] = useState(false);
+
   const handleTestPaystack = async () => {
     setTestingPaystack(true);
     setPaystackTestResult(null);
@@ -93,7 +98,46 @@ export default function SettingPage() {
           setAppdata(data.data.appdata);
         }
       });
+
+    // Load legal page content
+    fetch('/viewPrivacy')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data?.privacy) setLegalPrivacy(d.data.privacy);
+        else if (d.data?.privacypolicy) setLegalPrivacy(d.data.privacypolicy);
+      })
+      .catch(() => {});
+
+    fetch('/viewTerms')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data?.termsofuse) setLegalTerms(d.data.termsofuse);
+        else if (d.data?.terms) setLegalTerms(d.data.terms);
+      })
+      .catch(() => {});
   }, []);
+
+  const handleSaveLegalPages = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLegalLoading(true);
+    try {
+      await fetch('/updatePrivacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privacy: legalPrivacy }),
+      });
+      await fetch('/updateTerms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ termsofuse: legalTerms }),
+      });
+      alert('Legal pages saved successfully!');
+    } catch (err: any) {
+      alert('Error saving legal pages: ' + err.message);
+    } finally {
+      setLegalLoading(false);
+    }
+  };
 
   const handleSaveAppdata = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +248,18 @@ export default function SettingPage() {
                   href="#"
                 >
                   Change Password
+                </a>
+                <a
+                  className={`main-nav-link fw-normal nav-link pointer`}
+                  href="/viewPrivacy"
+                >
+                  📄 Privacy Policy
+                </a>
+                <a
+                  className={`main-nav-link fw-normal nav-link pointer`}
+                  href="/viewTerms"
+                >
+                  📄 Terms of Use
                 </a>
               </div>
             </div>

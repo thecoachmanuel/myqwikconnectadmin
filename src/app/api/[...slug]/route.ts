@@ -87,6 +87,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
+  // 1b. updatePages — Admin updates Privacy Policy / Terms of Use
+  if (endpoint === 'updatePages') {
+    const privacy = fields.privacy?.toString() ?? null;
+    const termsofuse = fields.termsofuse?.toString() ?? null;
+
+    if (!db.pages || db.pages.length === 0) {
+      db.pages = [{ id: 1, privacy: '', termsofuse: '' } as any];
+    }
+
+    if (privacy !== null) (db.pages[0] as any).privacy = privacy;
+    if (termsofuse !== null) (db.pages[0] as any).termsofuse = termsofuse;
+
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'Legal pages updated successfully.' });
+  }
+
   // 2. register
   if (endpoint === 'register') {
     const identity = fields.identity?.toString().trim() || '';
@@ -172,6 +188,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       await commitDb(db);
     }
 
+    // Auto-downgrade expired premium subscriptions
+    if ((user as any).is_pro === 1 && (user as any).pro_expire_date) {
+      const expDate = new Date((user as any).pro_expire_date);
+      if (expDate < new Date()) {
+        (user as any).is_pro = 0;
+        user.is_verified = user.is_verified === 3 ? 1 : user.is_verified;
+        (user as any).pro_expire_date = null;
+        await commitDb(db);
+      }
+    }
+
     // Attach user images
     const userImages = db.images.filter((img) => img.user_id === user!.id);
     user.images = userImages;
@@ -209,6 +236,16 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (fields.device_token) user.device_token = fields.device_token.toString();
     if (fields.device_type) user.device_type = parseInt(fields.device_type) || user.device_type;
     user.images = db.images.filter((img) => img.user_id === user.id);
+
+    // Auto-downgrade expired premium subscriptions on login
+    if ((user as any).is_pro === 1 && (user as any).pro_expire_date) {
+      const expDate = new Date((user as any).pro_expire_date);
+      if (expDate < new Date()) {
+        (user as any).is_pro = 0;
+        user.is_verified = user.is_verified === 3 ? 1 : user.is_verified;
+        (user as any).pro_expire_date = null;
+      }
+    }
     await commitDb(db);
 
     return jsonResponse({
@@ -269,6 +306,17 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           (lp) => lp.my_user_id === myUserId && lp.user_id === user.id
         );
       isSaved = csvSaved.includes(user.id.toString());
+    }
+
+    // Auto-downgrade expired premium subscriptions
+    if ((user as any).is_pro === 1 && (user as any).pro_expire_date) {
+      const expDate = new Date((user as any).pro_expire_date);
+      if (expDate < new Date()) {
+        (user as any).is_pro = 0;
+        user.is_verified = user.is_verified === 3 ? 1 : user.is_verified;
+        (user as any).pro_expire_date = null;
+        await commitDb(db);
+      }
     }
 
     const userData = {

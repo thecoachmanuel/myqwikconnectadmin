@@ -8,10 +8,11 @@ export default function ViewTermsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/viewTerms')
+    fetch('/viewTerms')
       .then((r) => r.json())
       .then((d) => {
         if (d.data?.termsofuse) setTerms(d.data.termsofuse);
+        else if (d.data?.terms) setTerms(d.data.terms);
       })
       .catch(() => {});
   }, []);

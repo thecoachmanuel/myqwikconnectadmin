@@ -8,10 +8,11 @@ export default function ViewPrivacyPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch('/api/viewPrivacy')
+    fetch('/viewPrivacy')
       .then((r) => r.json())
       .then((d) => {
         if (d.data?.privacy) setPrivacy(d.data.privacy);
+        else if (d.data?.privacypolicy) setPrivacy(d.data.privacypolicy);
       })
       .catch(() => {});
   }, []);
