@@ -1490,7 +1490,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         return jsonResponse({
           status: true,
           message: 'Paystack transaction initialized',
-          data: paystackData.data,
+          data: {
+            ...paystackData.data,
+            public_key: publicKey,
+          },
         });
       } else {
         const rawMsg = paystackData?.message || '';
