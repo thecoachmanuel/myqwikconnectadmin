@@ -35,60 +35,11 @@ export default function SettingPage() {
   const [newPassword, setNewPassword] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [testingPaystack, setTestingPaystack] = useState(false);
-  const [paystackTestResult, setPaystackTestResult] = useState<{ status: boolean; message: string } | null>(null);
 
   // Legal pages state (loaded for quick-view; full editing is at /viewPrivacy and /viewTerms)
   const [legalPrivacy, setLegalPrivacy] = useState('');
   const [legalTerms, setLegalTerms] = useState('');
   const [legalLoading, setLegalLoading] = useState(false);
-
-  const handleTestPaystack = async () => {
-    setTestingPaystack(true);
-    setPaystackTestResult(null);
-    try {
-      const res = await fetch('/testPaystackKey', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          secret_key: appdata.paystack_secret_key,
-          paystack_sandbox_mode: appdata.paystack_sandbox_mode,
-        }),
-      });
-      const data = await res.json();
-      setPaystackTestResult(data);
-    } catch (err: any) {
-      setPaystackTestResult({ status: false, message: 'Could not connect: ' + err.message });
-    } finally {
-      setTestingPaystack(false);
-    }
-  };
-
-  const handleEnableSandboxAndSave = async () => {
-    const updated = { ...appdata, paystack_sandbox_mode: 1 };
-    setAppdata(updated);
-    setLoading(true);
-    try {
-      const res = await fetch('/api/updateAppdata', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      const data = await res.json();
-      if (data.status) {
-        setPaystackTestResult({
-          status: true,
-          message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards.',
-        });
-      } else {
-        alert(data.message || 'Error saving settings');
-      }
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetch('/api/getSettingData')
@@ -326,126 +277,6 @@ export default function SettingPage() {
                     </div>
 
                     <div className="form-row mt-3">
-                      <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Paystack Payment Gateway (Naira Real Payment)</h6></div>
-                      {/* Sandbox warning banner */}
-                      {(appdata.paystack_sandbox_mode === 1 || appdata.paystack_sandbox_mode === true) && (
-                        <div className="col-12 mb-2">
-                          <div className="alert alert-warning d-flex align-items-start mb-0" style={{ borderRadius: 8 }}>
-                            <i className="fas fa-exclamation-triangle mr-2 mt-1" style={{ fontSize: 16, flexShrink: 0 }}></i>
-                            <div>
-                              <strong>⚠️ Sandbox Mode is ON — No real payments will be processed.</strong>
-                              <br />
-                              <span className="text-dark" style={{ fontSize: 13 }}>
-                                Users see a &quot;Demo Purchase&quot; dialog instead of real Paystack checkout.
-                                Enter your live keys below (<code>sk_live_...</code> / <code>pk_live_...</code>) and disable this toggle to accept real card payments.
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* Live key success banner */}
-                      {(appdata.paystack_sandbox_mode === 0 || appdata.paystack_sandbox_mode === false) &&
-                        typeof appdata.paystack_secret_key === 'string' &&
-                        appdata.paystack_secret_key.startsWith('sk_live_') &&
-                        appdata.paystack_secret_key.length > 25 && (
-                          <div className="col-12 mb-2">
-                            <div className="alert alert-success d-flex align-items-center mb-0" style={{ borderRadius: 8 }}>
-                              <i className="fas fa-check-circle mr-2" style={{ fontSize: 16 }}></i>
-                              <span><strong>✅ Live Mode Active</strong> — Real Paystack payments are enabled. Users will be charged real money.</span>
-                            </div>
-                          </div>
-                        )}
-                      <div className="form-group col-md-6">
-                        <label>Paystack Public Key</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="paystack_public_key"
-                          placeholder="pk_live_... (for live) or pk_test_... (for test)"
-                          value={appdata.paystack_public_key || ''}
-                          onChange={(e) => {
-                            const key = e.target.value.trim();
-                            const isLive = key.startsWith('pk_live_') && key.length > 25;
-                            setAppdata({ ...appdata, paystack_public_key: key, ...(isLive ? { paystack_sandbox_mode: 0 } : {}) });
-                          }}
-                        />
-                        <small className="form-text text-muted">Must start with <code>pk_live_</code> (live payments) or <code>pk_test_</code> (test mode)</small>
-                      </div>
-                      <div className="form-group col-md-6">
-                        <label>Paystack Secret Key</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="paystack_secret_key"
-                          placeholder="sk_live_... (for live) or sk_test_... (for test)"
-                          value={appdata.paystack_secret_key || ''}
-                          onChange={(e) => {
-                            const key = e.target.value.trim();
-                            const isLive = key.startsWith('sk_live_') && key.length > 25;
-                            // Auto-disable sandbox when a live key is typed
-                            setAppdata({ ...appdata, paystack_secret_key: key, ...(isLive ? { paystack_sandbox_mode: 0 } : {}) });
-                          }}
-                        />
-                        <small className="form-text text-muted">
-                          Must start with <code>sk_live_</code> or <code>sk_test_</code> — Get from{' '}
-                          <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" rel="noreferrer">dashboard.paystack.com</a>
-                          {' '}(Required for VIP subscriptions &amp; Diamond purchases)
-                        </small>
-                      </div>
-                      <div className="col-12 mt-1 mb-2">
-                        <div className="custom-control custom-switch">
-                          <input
-                            type="checkbox"
-                            className="custom-control-input"
-                            id="paystackSandboxSwitch"
-                            checked={appdata.paystack_sandbox_mode === 1 || appdata.paystack_sandbox_mode === true}
-                            onChange={(e) => setAppdata({ ...appdata, paystack_sandbox_mode: e.target.checked ? 1 : 0 })}
-                          />
-                          <label className="custom-control-label font-weight-bold text-dark" htmlFor="paystackSandboxSwitch">
-                            Paystack Sandbox / Demo Mode (Simulate payments instantly without real credentials)
-                          </label>
-                        </div>
-                        <small className="form-text text-muted">
-                          When enabled, VIP subscriptions and diamond purchases in the Orange app can be tested immediately in demo mode.{' '}
-                          <strong className="text-danger">Disable this switch when using your live Paystack credentials to accept real payments.</strong>
-                        </small>
-                      </div>
-                      <div className="col-12 mt-2">
-                        <button
-                          type="button"
-                          className="btn btn-outline-info btn-sm mr-2"
-                          onClick={handleTestPaystack}
-                          disabled={testingPaystack}
-                        >
-                          <i className={`fas ${testingPaystack ? 'fa-spinner fa-spin' : 'fa-check-circle'} mr-1`}></i>
-                          {testingPaystack ? 'Testing with Paystack...' : 'Test Paystack Keys'}
-                        </button>
-                        {paystackTestResult && (
-                          <div className="mt-2 d-flex flex-wrap align-items-center">
-                            <span
-                              className={`badge p-2 ${paystackTestResult.status ? 'badge-success' : 'badge-danger'
-                                }`}
-                              style={{ whiteSpace: 'normal', textAlign: 'left', display: 'inline-block', maxWidth: '750px' }}
-                            >
-                              {paystackTestResult.message}
-                            </span>
-                            {!paystackTestResult.status && (
-                              <button
-                                type="button"
-                                className="btn btn-warning btn-sm ml-2 mt-1 font-weight-bold shadow-sm"
-                                onClick={handleEnableSandboxAndSave}
-                                disabled={loading}
-                              >
-                                <i className="fas fa-magic mr-1"></i>
-                                Enable Sandbox Mode & Save Now
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="form-row mt-3">
                       <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Google Maps API (Map Screen & Discovery)</h6></div>
                       <div className="form-group col-md-12">
                         <label>Google Maps API Key (Web, Android & iOS)</label>
@@ -458,45 +289,8 @@ export default function SettingPage() {
                           onChange={(e) => setAppdata({ ...appdata, google_map_key: e.target.value.trim() })}
                         />
                         <small className="form-text text-muted">
-                          Used to render Google Maps in the Orange app. Enable "Maps JavaScript API", "Maps SDK for Android", and "Maps SDK for iOS" in Google Cloud Console.
+                          Used to render Google Maps in the Orange app. Enable &quot;Maps JavaScript API&quot;, &quot;Maps SDK for Android&quot;, and &quot;Maps SDK for iOS&quot; in Google Cloud Console.
                         </small>
-                      </div>
-                    </div>
-
-                    <div className="form-row mt-2">
-                      <div className="col-12"><hr /><h6 className="text-primary font-weight-bold">Cloudinary Media Storage (Feed & Chat Media)</h6></div>
-                      <div className="form-group col-md-4">
-                        <label>Cloud Name</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="cloudinary_cloud_name"
-                          placeholder="your-cloud-name"
-                          value={appdata.cloudinary_cloud_name || ''}
-                          onChange={(e) => setAppdata({ ...appdata, cloudinary_cloud_name: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group col-md-4">
-                        <label>API Key</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="cloudinary_api_key"
-                          placeholder="Cloudinary API Key"
-                          value={appdata.cloudinary_api_key || ''}
-                          onChange={(e) => setAppdata({ ...appdata, cloudinary_api_key: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-group col-md-4">
-                        <label>API Secret</label>
-                        <input
-                          type="password"
-                          className="form-control"
-                          name="cloudinary_api_secret"
-                          placeholder="Cloudinary API Secret"
-                          value={appdata.cloudinary_api_secret || ''}
-                          onChange={(e) => setAppdata({ ...appdata, cloudinary_api_secret: e.target.value })}
-                        />
                       </div>
                     </div>
                   </div>

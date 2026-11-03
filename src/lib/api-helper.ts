@@ -39,17 +39,17 @@ export async function uploadToCloudinaryIfConfigured(
   fileName: string,
   mimeType: string
 ): Promise<string | null> {
+  // Cloudinary credentials are strictly read from environment variables
   let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   let apiKey = process.env.CLOUDINARY_API_KEY;
   let apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-  if (!cloudName || !apiKey || !apiSecret) {
+  if ((!cloudName || !apiKey || !apiSecret) && process.env.CLOUDINARY_URL) {
     try {
-      const db = await getDb();
-      const appdata = db.appdata?.[0];
-      cloudName = cloudName || appdata?.cloudinary_cloud_name;
-      apiKey = apiKey || appdata?.cloudinary_api_key;
-      apiSecret = apiSecret || appdata?.cloudinary_api_secret;
+      const parsed = new URL(process.env.CLOUDINARY_URL);
+      apiKey = apiKey || parsed.username;
+      apiSecret = apiSecret || parsed.password;
+      cloudName = cloudName || parsed.hostname;
     } catch (_) {}
   }
 
@@ -91,17 +91,17 @@ export async function uploadToCloudinaryIfConfigured(
 
 export async function deleteFromCloudinary(urlOrPath: string): Promise<boolean> {
   if (!urlOrPath) return false;
+  // Cloudinary credentials are strictly read from environment variables
   let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   let apiKey = process.env.CLOUDINARY_API_KEY;
   let apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-  if (!cloudName || !apiKey || !apiSecret) {
+  if ((!cloudName || !apiKey || !apiSecret) && process.env.CLOUDINARY_URL) {
     try {
-      const db = await getDb();
-      const appdata = db.appdata?.[0];
-      cloudName = cloudName || appdata?.cloudinary_cloud_name;
-      apiKey = apiKey || appdata?.cloudinary_api_key;
-      apiSecret = apiSecret || appdata?.cloudinary_api_secret;
+      const parsed = new URL(process.env.CLOUDINARY_URL);
+      apiKey = apiKey || parsed.username;
+      apiSecret = apiSecret || parsed.password;
+      cloudName = cloudName || parsed.hostname;
     } catch (_) {}
   }
 

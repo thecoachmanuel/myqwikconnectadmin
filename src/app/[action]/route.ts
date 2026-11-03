@@ -837,12 +837,12 @@ async function handleAction(request: NextRequest, action: string, method: string
     return jsonResponse({ status: true, data });
   }
 
-  // 13b. testPaystackKey: Validates Paystack secret key from Admin Settings
+  // 13b. testPaystackKey: Validates Paystack secret key from environment variables or parameters
   if (action === 'testPaystackKey') {
     let secretKey = (
+      process.env.PAYSTACK_SECRET_KEY ||
       fields.secret_key ||
       fields.paystack_secret_key ||
-      db.appdata[0]?.paystack_secret_key ||
       ''
     )
       .toString()
@@ -851,7 +851,7 @@ async function handleAction(request: NextRequest, action: string, method: string
       .replace(/^["'`]|["'`]$/g, '')
       .trim();
 
-    const isSandboxMode = fields.paystack_sandbox_mode === 1 || fields.paystack_sandbox_mode === '1' || db.appdata[0]?.paystack_sandbox_mode === 1;
+    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || fields.paystack_sandbox_mode === 1 || fields.paystack_sandbox_mode === '1';
 
     const isPlaceholder =
       !secretKey ||
@@ -860,17 +860,24 @@ async function handleAction(request: NextRequest, action: string, method: string
       secretKey.includes('dummy') ||
       secretKey.length < 25;
 
-    if (isSandboxMode || isPlaceholder) {
+    if (isSandboxMode) {
       return jsonResponse({
         status: true,
-        message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards. (When ready for real payments, paste your real secret key from dashboard.paystack.com).',
+        message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards. (Set PAYSTACK_SANDBOX_MODE=0 and set PAYSTACK_SECRET_KEY in .env.local when ready for real payments).',
+      });
+    }
+
+    if (isPlaceholder) {
+      return jsonResponse({
+        status: false,
+        message: 'Paystack Secret Key is not configured. Please add PAYSTACK_SECRET_KEY in your backend environment (.env.local).',
       });
     }
 
     if (secretKey.startsWith('pk_')) {
       return jsonResponse({
         status: false,
-        message: "You entered a Public Key (starts with 'pk_'). Paystack requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
+        message: "You entered a Public Key (starts with 'pk_'). PAYSTACK_SECRET_KEY requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
       });
     }
 

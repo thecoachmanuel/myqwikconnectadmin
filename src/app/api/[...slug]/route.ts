@@ -1,4 +1,4 @@
-﻿import { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getDb, commitDb, getNextId } from '@/lib/db';
 import { corsHeaders, handleCors, jsonResponse, parseRequestBody, deleteFromCloudinary } from '@/lib/api-helper';
 import { User, UserImage, Post, PostContent, Comment, Story, Report } from '@/models/types';
@@ -64,6 +64,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
       feed_video_enabled: (db.appdata[0] as any)?.feed_video_enabled ?? 0,
       chat_video_enabled: (db.appdata[0] as any)?.chat_video_enabled ?? 0,
+      paystack_public_key: process.env.PAYSTACK_PUBLIC_KEY || "",
+      paystack_secret_key: process.env.PAYSTACK_SECRET_KEY || "",
+      paystack_sandbox_mode: process.env.PAYSTACK_SANDBOX_MODE === "1" ? 1 : 0,
     };
     const gifts = db.gifts || [];
     const interests = (db.interests || []).filter((i) => i.is_deleted === 0);
@@ -1417,28 +1420,20 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const diamonds = parseInt(fields.diamonds) || 0;
     const months = parseInt(fields.months) || 1;
 
-    let secretKey = (
-      db.appdata[0]?.paystack_secret_key ||
-      process.env.PAYSTACK_SECRET_KEY ||
-      ''
-    )
+    let secretKey = (process.env.PAYSTACK_SECRET_KEY || '')
       .toString()
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/^Bearer\s+/i, '')
       .replace(/^["'`]|["'`]$/g, '')
       .trim();
 
-    let publicKey = (
-      db.appdata[0]?.paystack_public_key ||
-      process.env.PAYSTACK_PUBLIC_KEY ||
-      ''
-    )
+    let publicKey = (process.env.PAYSTACK_PUBLIC_KEY || '')
       .toString()
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/^["'`]|["'`]$/g, '')
       .trim();
 
-    // Auto-swap if accidentally swapped in admin panel
+    // Auto-swap if accidentally swapped in environment variables
     if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) {
       const temp = secretKey;
       secretKey = publicKey;
@@ -1447,19 +1442,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey = publicKey;
     }
 
-    const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
-    // A key is "dummy" only if sandbox mode is explicitly ON or no real key is configured
-    const hasRealKey = secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_');
-    const isDummy =
-      isSandboxMode ||
-      !secretKey ||
-      secretKey === '' ||
-      secretKey.includes('test_orange_paystack') ||
-      secretKey.includes('dummy') ||
-      secretKey.includes('sandbox') ||
-      (!hasRealKey && secretKey.length < 25);
+    const hasRealKey = (secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_')) && secretKey.length > 25 && !secretKey.includes('test_orange_paystack') && !secretKey.includes('dummy') && !secretKey.includes('sandbox');
+    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || process.env.PAYSTACK_SANDBOX_MODE === 'true';
 
-    if (isDummy) {
+    if (isSandboxMode) {
       const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       return jsonResponse({
         status: true,
@@ -1472,11 +1458,18 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       });
     }
 
+    if (!hasRealKey) {
+      return jsonResponse({
+        status: false,
+        message: 'Paystack is not configured: PAYSTACK_SECRET_KEY is missing or invalid in environment variables (.env.local). Please set your live or test secret key.',
+      });
+    }
+
     // If secret key still starts with pk_
     if (secretKey.startsWith('pk_')) {
       return jsonResponse({
         status: false,
-        message: "Invalid Paystack Key Configuration: You entered a Public Key ('pk_...') in the Secret Key field. Paystack requires your Secret Key ('sk_live_...' or 'sk_test_...') in Admin Dashboard > Setting > Paystack.",
+        message: "Invalid Paystack Key Configuration: You entered a Public Key ('pk_...') in PAYSTACK_SECRET_KEY. Paystack requires your Secret Key ('sk_live_...' or 'sk_test_...') in environment variables.",
       });
     }
 
@@ -1511,13 +1504,13 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         });
       } else {
         const rawMsg = paystackData?.message || '';
-        let errorMsg = rawMsg || 'Paystack initialization failed. Please verify your Paystack keys in admin settings.';
+        let errorMsg = rawMsg || 'Paystack initialization failed. Please verify your PAYSTACK_SECRET_KEY in environment variables.';
         if (
           rawMsg.toLowerCase().includes('key') ||
           rawMsg.toLowerCase().includes('unauthorized') ||
           paystackRes.status === 401
         ) {
-          errorMsg = `Paystack rejected your API key: "${rawMsg}". Please go to Admin Dashboard → Settings → Paystack and enter your valid live Secret Key (sk_live_...) from dashboard.paystack.com.`;
+          errorMsg = `Paystack rejected your API key: "${rawMsg}". Please configure your valid Secret Key (PAYSTACK_SECRET_KEY=sk_live_...) in your backend environment variables (.env.local).`;
         }
         return jsonResponse({
           status: false,
@@ -1546,16 +1539,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       return jsonResponse({ status: false, message: 'User not found' }, 404);
     }
 
-    let secretKey = (
-      db.appdata[0]?.paystack_secret_key ||
-      process.env.PAYSTACK_SECRET_KEY ||
-      ''
-    ).trim().replace(/^[\"']|[\"']$/g, '');
-    let publicKey = (
-      db.appdata[0]?.paystack_public_key ||
-      process.env.PAYSTACK_PUBLIC_KEY ||
-      ''
-    ).trim().replace(/^[\"']|[\"']$/g, '');
+    let secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
+    let publicKey = (process.env.PAYSTACK_PUBLIC_KEY || '').trim().replace(/^["']|["']$/g, '');
 
     if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) {
       secretKey = publicKey;
@@ -1563,15 +1548,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey = publicKey;
     }
 
-    const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
-    const hasRealKeyVerify = secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_');
-    const isDummy = isSandboxMode || !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack') || (!hasRealKeyVerify && secretKey.length < 25);
+    const hasRealKeyVerify = (secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_')) && secretKey.length > 25 && !secretKey.includes('test_orange_paystack') && !secretKey.includes('dummy') && !secretKey.includes('sandbox');
+    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || process.env.PAYSTACK_SANDBOX_MODE === 'true';
     const isSandboxRef = reference.startsWith('ORANGE_SANDBOX_');
 
-    if (isDummy && !isSandboxRef) {
+    if (!isSandboxRef && !hasRealKeyVerify) {
       return jsonResponse({
         status: false,
-        message: 'Payment verification failed: Paystack secret key is not configured in Admin Settings.',
+        message: 'Payment verification failed: PAYSTACK_SECRET_KEY is not configured in environment variables (.env.local).',
       });
     }
 
@@ -1594,7 +1578,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     let verified = false;
-    if (isSandboxRef || isDummy) {
+    if (isSandboxRef || isSandboxMode) {
       verified = true;
     } else {
       try {
@@ -3188,12 +3172,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 39. testPaystackKey: Validates Paystack secret key from Admin Settings
+  // 39. testPaystackKey: Validates Paystack secret key from environment variables or parameters
   if (endpoint === 'testPaystackKey') {
     let secretKey = (
+      process.env.PAYSTACK_SECRET_KEY ||
       fields.secret_key ||
       fields.paystack_secret_key ||
-      db.appdata[0]?.paystack_secret_key ||
       ''
     )
       .toString()
@@ -3202,7 +3186,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       .replace(/^["'`]|["'`]$/g, '')
       .trim();
 
-    const isSandboxMode = fields.paystack_sandbox_mode === 1 || fields.paystack_sandbox_mode === '1' || db.appdata[0]?.paystack_sandbox_mode === 1;
+    const isSandboxMode = process.env.PAYSTACK_SANDBOX_MODE === '1' || fields.paystack_sandbox_mode === 1 || fields.paystack_sandbox_mode === '1';
 
     const isPlaceholder =
       !secretKey ||
@@ -3211,17 +3195,24 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey.includes('dummy') ||
       secretKey.length < 25;
 
-    if (isSandboxMode || isPlaceholder) {
+    if (isSandboxMode) {
       return jsonResponse({
         status: true,
-        message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards. (When ready for real payments, paste your real secret key from dashboard.paystack.com).',
+        message: '✓ Paystack Sandbox / Demo Mode Active: App payments and VIP subscriptions will work in simulated mode without charging real cards. (Set PAYSTACK_SANDBOX_MODE=0 and set PAYSTACK_SECRET_KEY in .env.local when ready for real payments).',
+      });
+    }
+
+    if (isPlaceholder) {
+      return jsonResponse({
+        status: false,
+        message: 'Paystack Secret Key is not configured. Please add PAYSTACK_SECRET_KEY in your backend environment (.env.local).',
       });
     }
 
     if (secretKey.startsWith('pk_')) {
       return jsonResponse({
         status: false,
-        message: "You entered a Public Key (starts with 'pk_'). Paystack requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
+        message: "You entered a Public Key (starts with 'pk_'). PAYSTACK_SECRET_KEY requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
       });
     }
 
