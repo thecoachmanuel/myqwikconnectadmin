@@ -35,6 +35,26 @@ export default function SettingPage() {
   const [newPassword, setNewPassword] = useState('');
   const [userPassword, setUserPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [testingPaystack, setTestingPaystack] = useState(false);
+  const [paystackTestResult, setPaystackTestResult] = useState<{ status: boolean; message: string } | null>(null);
+
+  const handleTestPaystack = async () => {
+    setTestingPaystack(true);
+    setPaystackTestResult(null);
+    try {
+      const res = await fetch('/testPaystackKey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret_key: appdata.paystack_secret_key }),
+      });
+      const data = await res.json();
+      setPaystackTestResult(data);
+    } catch (err: any) {
+      setPaystackTestResult({ status: false, message: 'Could not connect: ' + err.message });
+    } finally {
+      setTestingPaystack(false);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/getSettingData')
@@ -245,6 +265,27 @@ export default function SettingPage() {
                           onChange={(e) => setAppdata({ ...appdata, paystack_secret_key: e.target.value.trim() })}
                         />
                         <small className="form-text text-muted">Must start with <code>sk_live_</code> or <code>sk_test_</code> (Required for VIP subscriptions & Diamond purchases)</small>
+                      </div>
+                      <div className="col-12 mt-2">
+                        <button
+                          type="button"
+                          className="btn btn-outline-info btn-sm mr-2"
+                          onClick={handleTestPaystack}
+                          disabled={testingPaystack}
+                        >
+                          <i className={`fas ${testingPaystack ? 'fa-spinner fa-spin' : 'fa-check-circle'} mr-1`}></i>
+                          {testingPaystack ? 'Testing with Paystack...' : 'Test Paystack Keys'}
+                        </button>
+                        {paystackTestResult && (
+                          <span
+                            className={`badge p-2 ml-2 ${
+                              paystackTestResult.status ? 'badge-success' : 'badge-danger'
+                            }`}
+                            style={{ whiteSpace: 'normal', textAlign: 'left', display: 'inline-block' }}
+                          >
+                            {paystackTestResult.message}
+                          </span>
+                        )}
                       </div>
                     </div>
 

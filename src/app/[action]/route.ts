@@ -787,11 +787,107 @@ async function handleAction(request: NextRequest, action: string, method: string
 
   // 13. Live History: fetchLiveHistory
   if (action === 'fetchLiveHistory') {
-    const data = (db.live_history || []).map((h) => ({
-      ...h,
-      user: db.users.find((u) => u.id === h.user_id),
-    }));
+    const list = db.live_history || (db as any).live_histories || [];
+    const data = list.map((h: any) => {
+      const u = (db.users || []).find((user) => Number(user.id) === Number(h.user_id));
+      const images = u
+        ? (u.images && u.images.length
+            ? u.images
+            : (db.images || []).filter((img) => Number(img.user_id) === Number(u.id)))
+        : [];
+      const fullname =
+        u?.fullname ||
+        (u as any)?.name ||
+        (u as any)?.full_name ||
+        h.fullname ||
+        (h.user_id ? `User #${h.user_id}` : 'Anonymous Streamer');
+      const username =
+        u?.username ||
+        (u as any)?.user_name ||
+        h.username ||
+        'N/A';
+
+      return {
+        ...h,
+        fullname,
+        username,
+        user: u
+          ? {
+              ...u,
+              fullname,
+              username,
+              images,
+            }
+          : {
+              id: h.user_id,
+              fullname,
+              username,
+              images: [],
+            },
+      };
+    });
+
+    data.sort((a: any, b: any) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
+
     return jsonResponse({ status: true, data });
+  }
+
+  // 13b. testPaystackKey: Validates Paystack secret key from Admin Settings
+  if (action === 'testPaystackKey') {
+    let secretKey = (
+      fields.secret_key ||
+      fields.paystack_secret_key ||
+      db.appdata[0]?.paystack_secret_key ||
+      ''
+    )
+      .toString()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^Bearer\s+/i, '')
+      .replace(/^["'`]|["'`]$/g, '')
+      .trim();
+
+    if (!secretKey) {
+      return jsonResponse({
+        status: false,
+        message: 'Please enter a Paystack Secret Key first.',
+      });
+    }
+
+    if (secretKey.startsWith('pk_')) {
+      return jsonResponse({
+        status: false,
+        message: "You entered a Public Key (starts with 'pk_'). Paystack requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
+      });
+    }
+
+    try {
+      const res = await fetch('https://api.paystack.co/balance', {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.status) {
+        const balances = (data.data || []).map((b: any) => `${b.currency}: ${(b.balance / 100).toLocaleString()}`).join(', ');
+        return jsonResponse({
+          status: true,
+          message: `✓ Paystack Secret Key is VALID and ACTIVE! Balance (${balances || 'Connected'})`,
+        });
+      } else {
+        return jsonResponse({
+          status: false,
+          message: `✗ Paystack rejected this key: ${data.message || 'Unauthorized / Invalid key'}. Please check dashboard.paystack.com > Settings > API Keys & Webhooks.`,
+        });
+      }
+    } catch (err: any) {
+      return jsonResponse({
+        status: false,
+        message: `Could not connect to Paystack: ${err.message}`,
+      });
+    }
   }
 
   // 14. Redeem Requests: fetchPendingRedeems, fetchCompletedRedeems, completeRedeem, deleteRedeemRequest

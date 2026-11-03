@@ -42,11 +42,15 @@ export default function LiveHistoryPage() {
     } else {
       const q = search.toLowerCase();
       setFilteredHistory(
-        history.filter(
-          (h) =>
-            h.user?.fullname?.toLowerCase().includes(q) ||
-            h.user?.username?.toLowerCase().includes(q)
-        )
+        history.filter((h) => {
+          const fullname = h.user?.fullname || h.fullname || h.user?.name || '';
+          const username = h.user?.username || h.username || '';
+          return (
+            fullname.toLowerCase().includes(q) ||
+            username.toLowerCase().includes(q) ||
+            String(h.user_id).includes(q)
+          );
+        })
       );
     }
   }, [search, history]);
@@ -103,23 +107,33 @@ export default function LiveHistoryPage() {
                 ) : (
                   filteredHistory.map((h) => {
                     const avatar =
-                      h.user?.images && h.user.images[0]?.image
-                        ? h.user.images[0].image
-                        : '/asset/img/user.png';
-                    const avatarSrc = getImageUrl(avatar);
+                      (h.user?.images && h.user.images[0]?.image) ||
+                      h.user?.image ||
+                      h.image ||
+                      '/asset/img/user.png';
+                    const fullname =
+                      h.user?.fullname ||
+                      h.fullname ||
+                      (h.user as any)?.name ||
+                      (h.user_id ? `User #${h.user_id}` : 'Anonymous Streamer');
+                    const username =
+                      h.user?.username ||
+                      h.username ||
+                      (h.user as any)?.user_name ||
+                      'N/A';
 
                     return (
                       <tr key={h.id}>
                         <td>
                           <UserAvatar
-                            src={h.user?.images && h.user.images[0]?.image}
-                            name={h.user?.fullname}
+                            src={avatar}
+                            name={fullname}
                             size={45}
                           />
                         </td>
                         <td>
-                          <div><strong>{h.user?.fullname || `User #${h.user_id}`}</strong></div>
-                          <small className="text-muted">@{h.user?.username || 'N/A'}</small>
+                          <div><strong>{fullname}</strong></div>
+                          <small className="text-muted">@{username}</small>
                         </td>
                         <td>{formatStartedAt(h.started_at)}</td>
                         <td>{h.streamed_for || '00:10:00'}</td>

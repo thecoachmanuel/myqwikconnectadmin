@@ -1362,12 +1362,22 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       db.appdata[0]?.paystack_secret_key ||
       process.env.PAYSTACK_SECRET_KEY ||
       ''
-    ).trim().replace(/^[\"']|[\"']$/g, '');
+    )
+      .toString()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^Bearer\s+/i, '')
+      .replace(/^["'`]|["'`]$/g, '')
+      .trim();
+
     let publicKey = (
       db.appdata[0]?.paystack_public_key ||
       process.env.PAYSTACK_PUBLIC_KEY ||
       ''
-    ).trim().replace(/^[\"']|[\"']$/g, '');
+    )
+      .toString()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^["'`]|["'`]$/g, '')
+      .trim();
 
     // Auto-swap if accidentally swapped in admin panel
     if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) {
@@ -1378,7 +1388,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey = publicKey;
     }
 
-    const isDummy = !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack');
+    const isDummy =
+      !secretKey ||
+      secretKey === '' ||
+      secretKey.includes('test_orange_paystack') ||
+      secretKey.includes('dummy') ||
+      secretKey.includes('sandbox');
 
     if (isDummy) {
       const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1407,11 +1422,11 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${secretKey.trim()}`,
+          Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email,
+          email: email.trim().toLowerCase(),
           amount: amountKobo,
           reference,
           metadata: {
@@ -1433,8 +1448,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       } else {
         const rawMsg = paystackData?.message || '';
         let errorMsg = rawMsg || 'Paystack initialization failed. Please verify your Paystack keys in admin settings.';
-        if (rawMsg.toLowerCase().includes('key') || rawMsg.toLowerCase().includes('unauthorized')) {
-          errorMsg = `Paystack rejected your Secret Key (${rawMsg}). Please open Admin Dashboard > Setting and verify you have entered a valid live or test Paystack Secret Key (sk_live_... or sk_test_...) without quotes or spaces.`;
+        if (
+          rawMsg.toLowerCase().includes('key') ||
+          rawMsg.toLowerCase().includes('unauthorized') ||
+          paystackRes.status === 401
+        ) {
+          errorMsg = `Paystack rejected your Secret Key (${rawMsg || 'Invalid key'}). Please open Admin Dashboard > Setting > Paystack and ensure you copied the Secret Key (starts with sk_live_ or sk_test_) directly from dashboard.paystack.com > Settings > API Keys & Webhooks.`;
         }
         return jsonResponse({
           status: false,
@@ -1807,6 +1826,14 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   // 18. addLiveStreamHistory & fetchAllLiveStreamHistory
   if (endpoint === 'addLiveStreamHistory') {
     const userId = parseInt(fields.user_id);
+    const user = (db.users || []).find((u) => Number(u.id) === userId);
+    const amount = parseFloat(fields.amount_collected) || 0;
+    if (user) {
+      user.total_streams = (user.total_streams || 0) + 1;
+      user.total_collected = (user.total_collected || 0) + amount;
+      user.wallet = (user.wallet || 0) + amount;
+    }
+
     let startedAt = fields.started_at;
     if (!startedAt) {
       startedAt = new Date().toISOString();
@@ -1819,15 +1846,20 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         }
       } catch (_) {}
     }
+
     const newHistory: any = {
-      id: getNextId(db.live_history),
+      id: getNextId(db.live_history || []),
       user_id: userId,
+      fullname: user?.fullname || (user as any)?.name || `User #${userId}`,
+      username: user?.username || 'user',
       started_at: startedAt,
       streamed_for: fields.streamed_for || '00:10:00',
-      amount_collected: parseInt(fields.amount_collected) || 0,
+      amount_collected: amount,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    if (!db.live_history) db.live_history = [];
     db.live_history.push(newHistory);
     await commitDb(db);
 
@@ -1840,12 +1872,62 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
   if (endpoint === 'fetchAllLiveStreamHistory') {
     const userId = parseInt(fields.user_id);
-    const list = db.live_history.filter((h) => h.user_id === userId);
+    const list = (db.live_history || []).filter((h) => Number(h.user_id) === userId);
     return jsonResponse({
       status: true,
       message: 'Fetch successful',
       data: list,
     });
+  }
+
+  if (endpoint === 'fetchLiveHistory') {
+    const list = db.live_history || (db as any).live_histories || [];
+    const data = list.map((h: any) => {
+      const u = (db.users || []).find((user) => Number(user.id) === Number(h.user_id));
+      const images = u
+        ? (u.images && u.images.length
+            ? u.images
+            : (db.images || []).filter((img) => Number(img.user_id) === Number(u.id)))
+        : [];
+      const fullname =
+        u?.fullname ||
+        (u as any)?.name ||
+        h.fullname ||
+        (h.user_id ? `User #${h.user_id}` : 'Anonymous Streamer');
+      const username =
+        u?.username ||
+        (u as any)?.user_name ||
+        h.username ||
+        'N/A';
+
+      return {
+        ...h,
+        fullname,
+        username,
+        user: u
+          ? {
+              ...u,
+              fullname,
+              username,
+              images,
+            }
+          : {
+              id: h.user_id,
+              fullname,
+              username,
+              images: [],
+            },
+      };
+    });
+
+    data.sort((a: any, b: any) => {
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    });
+
+    return jsonResponse({ status: true, data });
   }
 
   // 19. addUserReport & reportPost & getPackage
@@ -3008,56 +3090,57 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 39. addLiveStreamHistory & fetchAllLiveStreamHistory
-  if (endpoint === 'addLiveStreamHistory') {
-    const userId = parseInt(fields.user_id);
-    const user = db.users.find((u) => u.id === userId);
-    if (user) {
-      user.total_streams = (user.total_streams || 0) + 1;
-      const amount = parseFloat(fields.amount_collected) || 0;
-      user.total_collected = (user.total_collected || 0) + amount;
-      user.wallet = (user.wallet || 0) + amount;
-    }
-    let startedAt2 = fields.started_at;
-    if (!startedAt2) {
-      startedAt2 = new Date().toISOString();
-    } else if (/^\d{1,2}:\d{2}/.test(startedAt2.trim())) {
-      try {
-        const todayStr = new Date().toISOString().split('T')[0];
-        const parsed = new Date(`${todayStr} ${startedAt2}`);
-        if (!isNaN(parsed.getTime())) {
-          startedAt2 = parsed.toISOString();
-        }
-      } catch (_) {}
-    }
-    const newHistory: any = {
-      id: getNextId(db.live_history || []),
-      user_id: userId,
-      started_at: startedAt2,
-      streamed_for: fields.streamed_for || '00:00:00',
-      amount_collected: parseFloat(fields.amount_collected) || 0,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    if (!db.live_history) db.live_history = [];
-    db.live_history.push(newHistory);
-    await commitDb(db);
+  // 39. testPaystackKey: Validates Paystack secret key from Admin Settings
+  if (endpoint === 'testPaystackKey') {
+    let secretKey = (
+      fields.secret_key ||
+      fields.paystack_secret_key ||
+      db.appdata[0]?.paystack_secret_key ||
+      ''
+    )
+      .toString()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/^Bearer\s+/i, '')
+      .replace(/^["'`]|["'`]$/g, '')
+      .trim();
 
-    return jsonResponse({
-      status: true,
-      message: 'History added successfully!',
-      data: newHistory,
-    });
-  }
+    if (!secretKey) {
+      return jsonResponse({
+        status: false,
+        message: 'Please enter a Paystack Secret Key first.',
+      });
+    }
 
-  if (endpoint === 'fetchAllLiveStreamHistory') {
-    const userId = parseInt(fields.user_id);
-    const list = (db.live_history || []).filter((h) => h.user_id === userId);
-    return jsonResponse({
-      status: true,
-      message: 'data get successfully',
-      data: list,
-    });
+    if (secretKey.startsWith('pk_')) {
+      return jsonResponse({
+        status: false,
+        message: "You entered a Public Key (starts with 'pk_'). Paystack requires your Secret Key (starts with 'sk_live_' or 'sk_test_').",
+      });
+    }
+
+    try {
+      const res = await fetch('https://api.paystack.co/balance', {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.status) {
+        const balances = (data.data || []).map((b: any) => `${b.currency}: ${(b.balance / 100).toLocaleString()}`).join(', ');
+        return jsonResponse({
+          status: true,
+          message: `✓ Paystack Secret Key is VALID and ACTIVE! Balance (${balances || 'Connected'})`,
+        });
+      } else {
+        return jsonResponse({
+          status: false,
+          message: `✗ Paystack rejected this key: ${data.message || 'Unauthorized / Invalid key'}. Please check dashboard.paystack.com > Settings > API Keys & Webhooks.`,
+        });
+      }
+    } catch (err: any) {
+      return jsonResponse({
+        status: false,
+        message: `Could not connect to Paystack: ${err.message}`,
+      });
+    }
   }
 
   // Default fallback for any unhandled /api/... routes
