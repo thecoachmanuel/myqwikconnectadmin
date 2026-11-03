@@ -1474,6 +1474,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     const reference = `ORANGE_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const appBaseUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://myqwikconnectadmin.vercel.app').replace(/\/$/, '');
+    const callbackUrl = `${appBaseUrl}/api/paystack/callback`;
 
     try {
       const paystackRes = await fetch('https://api.paystack.co/transaction/initialize', {
@@ -1486,8 +1488,10 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           email: email.trim().toLowerCase(),
           amount: amountKobo,
           reference,
+          callback_url: callbackUrl,
           metadata: {
             user_id: userId,
+            identity: fields.identity?.toString() || email.trim(),
             plan_id: planId,
             type,
             diamonds,
@@ -1534,11 +1538,6 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     const diamonds = parseInt(fields.diamonds) || 0;
     const months = parseInt(fields.months) || 1;
 
-    const user = db.users.find((u) => u.id === userId);
-    if (!user) {
-      return jsonResponse({ status: false, message: 'User not found' }, 404);
-    }
-
     let secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
     let publicKey = (process.env.PAYSTACK_PUBLIC_KEY || '').trim().replace(/^["']|["']$/g, '');
 
@@ -1578,6 +1577,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     let verified = false;
+    let paystackEmail: string | null = null;
+    let paystackUserId: number = userId;
+    let paystackType: string = type;
+    let paystackDiamonds: number = diamonds;
+    let paystackMonths: number = months;
+
     if (isSandboxRef || isSandboxMode) {
       verified = true;
     } else {
@@ -1590,6 +1595,16 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         const paystackData = await paystackRes.json();
         if (paystackData?.status === true && paystackData?.data?.status === 'success') {
           verified = true;
+          // Extract metadata from Paystack response for resilient user lookup
+          paystackEmail = paystackData.data?.customer?.email || paystackData.data?.metadata?.email || null;
+          const metaUserId = parseInt(paystackData.data?.metadata?.user_id || '0') || 0;
+          if (metaUserId > 0) paystackUserId = metaUserId;
+          const metaType = paystackData.data?.metadata?.type?.toString();
+          if (metaType) paystackType = metaType;
+          const metaDiamonds = parseInt(paystackData.data?.metadata?.diamonds || '0') || 0;
+          if (metaDiamonds > 0) paystackDiamonds = metaDiamonds;
+          const metaMonths = parseInt(paystackData.data?.metadata?.months || '0') || 0;
+          if (metaMonths > 0) paystackMonths = metaMonths;
         } else {
           return jsonResponse({
             status: false,
@@ -1612,28 +1627,274 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       });
     }
 
+    // Resilient user lookup: try by ID first, then by identity/email (handles serverless db resets)
+    let user = db.users.find((u) => Number(u.id) === Number(paystackUserId));
+    if (!user && userId > 0) {
+      user = db.users.find((u) => Number(u.id) === Number(userId));
+    }
+    const reqIdentity = (fields.identity?.toString() || '').trim().toLowerCase();
+    if (!user && reqIdentity) {
+      user = db.users.find((u) => (u.identity || '').toLowerCase() === reqIdentity);
+    }
+    if (!user && paystackEmail) {
+      // Find by email/identity (Paystack email matches what Flutter sent during initialize)
+      const emailLower = paystackEmail.toLowerCase();
+      user = db.users.find(
+        (u) => (u.identity || '').toLowerCase() === emailLower
+      );
+      // Also try matching the generated email pattern: user_{id}@orangeapp.com
+      if (!user) {
+        const idFromEmail = emailLower.match(/^user_(\d+)@/)?.[1];
+        if (idFromEmail) {
+          const idNum = parseInt(idFromEmail);
+          user = db.users.find((u) => Number(u.id) === Number(idNum));
+        }
+      }
+    }
+
+    if (!user) {
+      // Last resort: Paystack confirmed payment but user not in db (serverless cold start).
+      // Auto-register user so payment is not lost.
+      if (paystackEmail && verified) {
+        const newId = paystackUserId > 0 ? paystackUserId : (db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1);
+        const appdata = db.appdata[0];
+        const freeCoins = appdata?.new_user_free_coins || 250;
+        const newUser = {
+          id: newId,
+          is_block: 0,
+          gender: 1,
+          savedprofile: '',
+          likedprofile: '',
+          interests: '',
+          identity: paystackEmail,
+          username: `user_${newId}`,
+          fullname: `User ${newId}`,
+          instagram: '', youtube: '', facebook: '',
+          country: 'Nigeria', state: '', city: '',
+          bio: '', about: '',
+          lattitude: '6.5244', longitude: '3.3792',
+          login_type: 1,
+          device_token: '',
+          blocked_users: '',
+          wallet: freeCoins,
+          total_collected: 0, total_streams: 0,
+          device_type: 1,
+          is_notification: 1, is_verified: 0, show_on_map: 1,
+          anonymous: 0, is_video_call: 1, can_go_live: 0,
+          is_live_now: 0, is_fake: 0, password: '',
+          following: 0, followers: 0,
+          gender_preferred: 2,
+          age_preferred_min: 18, age_preferred_max: 50,
+          distance_preference: 100,
+          relationship_goal_id: 0, religion_key: 0,
+          language_keys: '', dob: '2000-01-01',
+          hidden_user_ids: '', app_language: 'en',
+          firebase_uid: '',
+          is_profile_complete: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          images: [],
+        } as any;
+        db.users.push(newUser);
+        user = newUser;
+      } else {
+        return jsonResponse({ status: false, message: 'User not found. Payment was verified but user account could not be located. Please contact support with reference: ' + reference });
+      }
+    }
+
     // Mark reference as consumed
     (db as any).processed_paystack_references.push(reference);
 
-    if (type === 'diamond') {
-      const addedCoins = diamonds > 0 ? diamonds : 100;
+    if (paystackType === 'diamond') {
+      const addedCoins = paystackDiamonds > 0 ? paystackDiamonds : 100;
       user.wallet = (user.wallet || 0) + addedCoins;
-    } else if (type === 'subscription') {
+    } else if (paystackType === 'subscription') {
       user.is_verified = 3;
-      user.is_pro = 1;
+      (user as any).is_pro = 1;
       const expireDate = new Date();
-      expireDate.setDate(expireDate.getDate() + (months * 30));
-      user.pro_expire_date = expireDate.toISOString();
+      expireDate.setDate(expireDate.getDate() + (paystackMonths * 30));
+      (user as any).pro_expire_date = expireDate.toISOString();
     }
 
     await commitDb(db);
 
-    user.images = db.images.filter((img) => img.user_id === user.id) || [];
+    user.images = db.images.filter((img) => img.user_id === user!.id) || [];
     return jsonResponse({
       status: true,
-      message: type === 'diamond' ? `Successfully added ${diamonds} diamonds to your wallet!` : 'VIP Subscription activated successfully!',
+      message: paystackType === 'diamond' ? `Successfully added ${paystackDiamonds} diamonds to your wallet!` : 'VIP Subscription activated successfully!',
       data: user,
     });
+  }
+
+  // 12c. paystack/callback (Paystack browser redirect after payment)
+  if (endpoint === 'paystack/callback' || endpoint === 'paystackCallback') {
+    const reference = (fields.reference || fields.trxref || request.nextUrl.searchParams.get('reference') || request.nextUrl.searchParams.get('trxref') || '').toString().trim();
+
+    let secretKey = (process.env.PAYSTACK_SECRET_KEY || '').trim().replace(/^["']|["']$/g, '');
+    let publicKey = (process.env.PAYSTACK_PUBLIC_KEY || '').trim().replace(/^["']|["']$/g, '');
+    if (secretKey.startsWith('pk_') && publicKey.startsWith('sk_')) secretKey = publicKey;
+
+    let isSuccess = false;
+    let message = 'Payment processed.';
+    let userDetails = '';
+
+    if (reference) {
+      if (!(db as any).processed_paystack_references) (db as any).processed_paystack_references = [];
+      const alreadyProcessed = (db as any).processed_paystack_references.includes(reference);
+
+      if (alreadyProcessed) {
+        isSuccess = true;
+        message = 'Payment already confirmed and credited to your account.';
+      } else {
+        try {
+          const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+            headers: { Authorization: `Bearer ${secretKey.trim()}` },
+          });
+          const paystackData = await paystackRes.json();
+          if (paystackData?.status === true && paystackData?.data?.status === 'success') {
+            isSuccess = true;
+            (db as any).processed_paystack_references.push(reference);
+
+            const pEmail = paystackData.data?.customer?.email || paystackData.data?.metadata?.email;
+            const pUserId = parseInt(paystackData.data?.metadata?.user_id || '0') || 0;
+            const pType = paystackData.data?.metadata?.type?.toString() || 'diamond';
+            const pDiamonds = parseInt(paystackData.data?.metadata?.diamonds || '0') || 0;
+            const pMonths = parseInt(paystackData.data?.metadata?.months || '0') || 1;
+
+            let user = db.users.find((u) => Number(u.id) === Number(pUserId));
+            if (!user && pEmail) {
+              const el = pEmail.toLowerCase();
+              user = db.users.find((u) => (u.identity || '').toLowerCase() === el);
+            }
+
+            if (!user && pEmail) {
+              const newId = pUserId > 0 ? pUserId : (db.users.length > 0 ? Math.max(...db.users.map(u => u.id)) + 1 : 1);
+              const appdata = db.appdata[0];
+              const freeCoins = appdata?.new_user_free_coins || 250;
+              user = {
+                id: newId, is_block: 0, gender: 1, savedprofile: '', likedprofile: '', interests: '',
+                identity: pEmail, username: `user_${newId}`, fullname: `User ${newId}`,
+                instagram: '', youtube: '', facebook: '', country: 'Nigeria', state: '', city: '',
+                bio: '', about: '', lattitude: '6.5244', longitude: '3.3792', login_type: 1, device_token: '',
+                blocked_users: '', wallet: freeCoins, total_collected: 0, total_streams: 0, device_type: 1,
+                is_notification: 1, is_verified: 0, show_on_map: 1, anonymous: 0, is_video_call: 1,
+                can_go_live: 0, is_live_now: 0, is_fake: 0, password: '', following: 0, followers: 0,
+                gender_preferred: 2, age_preferred_min: 18, age_preferred_max: 50, distance_preference: 100,
+                relationship_goal_id: 0, religion_key: 0, language_keys: '', dob: '2000-01-01',
+                hidden_user_ids: '', app_language: 'en', firebase_uid: '', is_profile_complete: 0,
+                created_at: new Date().toISOString(), updated_at: new Date().toISOString(), images: [],
+              } as any;
+              db.users.push(user!);
+            }
+
+            if (user) {
+              if (pType === 'diamond') {
+                const add = pDiamonds > 0 ? pDiamonds : 100;
+                user.wallet = (user.wallet || 0) + add;
+                message = `💎 Successfully added ${add} diamonds to your wallet!`;
+              } else if (pType === 'subscription') {
+                user.is_verified = 3;
+                (user as any).is_pro = 1;
+                const exp = new Date();
+                exp.setDate(exp.getDate() + (pMonths * 30));
+                (user as any).pro_expire_date = exp.toISOString();
+                message = `👑 VIP Subscription activated successfully for ${pMonths} month${pMonths > 1 ? 's' : ''}!`;
+              }
+              await commitDb(db);
+              userDetails = `Account: ${user.fullname || user.username || user.identity}`;
+            }
+          } else {
+            message = paystackData?.data?.gateway_response || paystackData?.message || 'Payment not completed.';
+          }
+        } catch (e: any) {
+          message = 'Verification notice: ' + e.message;
+        }
+      }
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${isSuccess ? 'Payment Successful' : 'Payment Status'} - Orange</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #FFF5EE; color: #1E1E1E; padding: 20px; box-sizing: border-box; }
+    .card { background: #FFFFFF; padding: 40px 32px; border-radius: 28px; box-shadow: 0 15px 45px rgba(254, 68, 85, 0.12); text-align: center; max-width: 440px; width: 100%; }
+    .icon { width: 80px; height: 80px; background: ${isSuccess ? 'linear-gradient(135deg, #FF6A00, #EE0979)' : '#A0A0A0'}; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: white; font-size: 42px; margin-bottom: 22px; box-shadow: 0 8px 25px rgba(238, 9, 121, 0.25); }
+    h1 { font-size: 24px; font-weight: 700; margin: 0 0 12px 0; color: #1E1E1E; }
+    p { font-size: 15px; color: #555555; margin: 0 0 8px 0; line-height: 1.55; }
+    .user { font-size: 13px; color: #888888; margin-bottom: 24px; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #FF6A00, #EE0979); color: white; text-decoration: none; padding: 14px 34px; border-radius: 30px; font-weight: 600; font-size: 15px; border: none; cursor: pointer; transition: transform 0.15s ease; box-shadow: 0 6px 20px rgba(238, 9, 121, 0.3); }
+    .btn:active { transform: scale(0.97); }
+    .note { margin-top: 20px; font-size: 12px; color: #999999; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">${isSuccess ? '✓' : '!'}</div>
+    <h1>${isSuccess ? 'Payment Successful!' : 'Payment Update'}</h1>
+    <p>${message}</p>
+    ${userDetails ? `<p class="user">${userDetails}</p>` : ''}
+    <p style="font-size:14px;color:#777;margin-bottom:24px;">Your Orange app has processed this payment automatically. You can close this tab and return to the app.</p>
+    <button class="btn" onclick="try{window.close();}catch(e){}">Return to Orange App</button>
+    <div class="note">This window will close automatically...</div>
+  </div>
+  <script>
+    setTimeout(() => { try { window.close(); } catch(e){} }, 4000);
+  </script>
+</body>
+</html>`;
+
+    return new Response(html, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        ...corsHeaders,
+      },
+    });
+  }
+
+  // 12d. paystack/webhook (Automatic Paystack Event Handler)
+  if (endpoint === 'paystack/webhook' || endpoint === 'paystackWebhook') {
+    const event = fields.event?.toString() || '';
+    const data = fields.data || {};
+    const reference = data.reference?.toString() || fields.reference?.toString() || '';
+
+    if (event === 'charge.success' && reference) {
+      if (!(db as any).processed_paystack_references) (db as any).processed_paystack_references = [];
+      if (!(db as any).processed_paystack_references.includes(reference)) {
+        (db as any).processed_paystack_references.push(reference);
+
+        const pEmail = data.customer?.email || data.metadata?.email;
+        const pUserId = parseInt(data.metadata?.user_id || '0') || 0;
+        const pType = data.metadata?.type?.toString() || 'diamond';
+        const pDiamonds = parseInt(data.metadata?.diamonds || '0') || 0;
+        const pMonths = parseInt(data.metadata?.months || '0') || 1;
+
+        let user = db.users.find((u) => Number(u.id) === Number(pUserId));
+        if (!user && pEmail) {
+          const el = pEmail.toLowerCase();
+          user = db.users.find((u) => (u.identity || '').toLowerCase() === el);
+        }
+
+        if (user) {
+          if (pType === 'diamond') {
+            const add = pDiamonds > 0 ? pDiamonds : 100;
+            user.wallet = (user.wallet || 0) + add;
+          } else if (pType === 'subscription') {
+            user.is_verified = 3;
+            (user as any).is_pro = 1;
+            const exp = new Date();
+            exp.setDate(exp.getDate() + (pMonths * 30));
+            (user as any).pro_expire_date = exp.toISOString();
+          }
+          await commitDb(db);
+        }
+      }
+    }
+
+    return jsonResponse({ status: true, message: 'Webhook received' });
   }
 
   // 13. addCoinsToWallet / minusCoinsFromWallet
