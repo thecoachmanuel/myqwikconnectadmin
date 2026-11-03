@@ -62,6 +62,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       privacypolicy: db.pages[0]?.privacy || (db.appdata[0] as any)?.privacypolicy || '',
       termsofuse: db.pages[0]?.termsofuse || (db.appdata[0] as any)?.termsofuse || '',
       web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
+      feed_video_enabled: (db.appdata[0] as any)?.feed_video_enabled ?? 0,
+      chat_video_enabled: (db.appdata[0] as any)?.chat_video_enabled ?? 0,
     };
     const gifts = db.gifts || [];
     const interests = (db.interests || []).filter((i) => i.is_deleted === 0);
@@ -2265,11 +2267,18 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         data: {
           users_stories: [],
           posts: [],
+          has_more: false,
+          total_count: 0,
         },
       });
     }
 
     const currentUserId = parseInt(fields.user_id || fields.my_user_id) || 0;
+    // Pagination params (Facebook-style batch loading)
+    const PAGE_SIZE = 10;
+    const requestedPage = Math.max(1, parseInt(fields.page || '1') || 1);
+    const offset = (requestedPage - 1) * PAGE_SIZE;
+
     const postsWithDetails = db.posts.map((p) => {
       const postUser = db.users.find((u) => u.id === p.user_id);
       let userImages = postUser ? db.images.filter((i) => i.user_id === postUser.id) : [];
@@ -2323,29 +2332,28 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const hoursAgo = postTime > 0 ? Math.max(0, (Date.now() - postTime) / (1000 * 60 * 60)) : 100;
 
       // 1. Fresh Post Exploration / Discovery Boost (FB/IG EdgeRank Freshness Boost)
-      // New posts receive strong discovery boost so every new post gets immediate visibility
       if (hoursAgo < 1) {
-        score += 160; // Just posted: immediate top-of-feed boost
+        score += 160;
       } else if (hoursAgo < 3) {
-        score += 120; // Very fresh
+        score += 120;
       } else if (hoursAgo < 8) {
-        score += 70;  // Fresh
+        score += 70;
       } else if (hoursAgo < 24) {
-        score += 35;  // Today
+        score += 35;
       } else if (hoursAgo < 72) {
-        score += 15;  // Recent days
+        score += 15;
       }
 
-      // 2. Creator Affinity & Social Graph (Instagram Relationship Factor)
+      // 2. Creator Affinity & Social Graph
       const isCreatorFollowed = followingIds.has(p.user_id);
       const isSelf = p.user_id === currentUserId;
       if (isSelf) {
-        score += 150; // User immediately sees their own newly published content at top
+        score += 150;
       } else if (isCreatorFollowed) {
-        score += 85;  // High priority for followed accounts
+        score += 85;
       }
 
-      // 3. Content Interest & Topical Relevance (IG Interest Graph)
+      // 3. Content Interest & Topical Relevance
       const postInterests = String(p.interest_ids || '')
         .split(',')
         .map((s) => s.trim().toLowerCase())
@@ -2363,7 +2371,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
         }
       }
 
-      // 4. Engagement Velocity & Gravity Decay (HackerNews/Instagram Gravity Decay)
+      // 4. Engagement Velocity & Gravity Decay
       const likes = p.likes_count || 0;
       const comments = p.comments_count || 0;
       const rawEngagement = likes * 2.5 + comments * 5.0;
@@ -2371,47 +2379,51 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const decayedEngagement = rawEngagement / gravityDecay;
       score += decayedEngagement;
 
-      // 5. Media Richness Signal (IG favors posts with video/multiple media)
+      // 5. Media Richness Signal
       const contentItems = p.content || [];
       if (contentItems.some((c: any) => c.content_type === 1)) {
-        score += 25; // Video bonus
+        score += 25;
       } else if (contentItems.length > 1) {
-        score += 15; // Carousel bonus
+        score += 15;
       }
 
-      // 6. Dynamic jitter (+/- 6 points) for natural variety on pull-to-refresh
+      // 6. Dynamic jitter for variety on pull-to-refresh
       const jitter = (Math.random() - 0.5) * 12;
       score += jitter;
 
       return { post: p, score };
     });
 
-    // Initial sort by ranking score
+    // Sort by ranking score
     scoredPosts.sort((a, b) => b.score - a.score);
 
-    // 7. Author Diversity Interleaving (Instagram / FB Anti-Clustering Rule)
-    // Avoid showing consecutive posts by the same author in a row
+    // 7. Author Diversity Interleaving
     const interleavedPosts: any[] = [];
     const remainingPosts = [...scoredPosts];
     let lastAuthorId: number | null = null;
 
     while (remainingPosts.length > 0) {
       let pickIndex = remainingPosts.findIndex((sp) => sp.post.user_id !== lastAuthorId);
-      if (pickIndex === -1) {
-        pickIndex = 0;
-      }
+      if (pickIndex === -1) pickIndex = 0;
       const [picked] = remainingPosts.splice(pickIndex, 1);
       interleavedPosts.push(picked.post);
       lastAuthorId = picked.post.user_id;
     }
-    const rankedPosts = interleavedPosts;
+
+    // Apply pagination slice
+    const totalCount = interleavedPosts.length;
+    const paginatedPosts = interleavedPosts.slice(offset, offset + PAGE_SIZE);
+    const hasMore = offset + PAGE_SIZE < totalCount;
 
     return jsonResponse({
       status: true,
       message: 'Fetch posts',
       data: {
-        users_stories: followingUsers,
-        posts: rankedPosts,
+        users_stories: requestedPage === 1 ? followingUsers : [], // stories only on first page
+        posts: paginatedPosts,
+        has_more: hasMore,
+        total_count: totalCount,
+        current_page: requestedPage,
       },
     });
   }

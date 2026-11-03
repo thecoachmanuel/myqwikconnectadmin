@@ -50,7 +50,9 @@
       "paystack_public_key": "pk_test_orange_paystack",
       "paystack_secret_key": "sk_test_orange_paystack",
       "paystack_enabled": 1,
-      "paystack_sandbox_mode": 1
+      "paystack_sandbox_mode": 1,
+      "feed_video_enabled": 0,
+      "chat_video_enabled": 0
     }
   ],
   "users": [

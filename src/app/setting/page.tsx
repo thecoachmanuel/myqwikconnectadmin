@@ -621,6 +621,46 @@ export default function SettingPage() {
                           Show mobile app viewport on desktop browsers (PWA style). Toggle off to stretch across full desktop view.
                         </small>
                       </div>
+                      <div className="form-group col-md-4 m-0">
+                        <label className="d-block">
+                          <i className="fas fa-video mr-1 text-danger"></i> Feed Video Upload
+                        </label>
+                        <label className="switch ml-1">
+                          <input
+                            type="checkbox"
+                            name="feed_video_enabled"
+                            checked={appdata.feed_video_enabled === 1}
+                            onChange={(e) => {
+                              const val = e.target.checked ? 1 : 0;
+                              setAppdata({ ...appdata, feed_video_enabled: val });
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <small className="form-text text-muted d-block mt-1">
+                          Allow users to upload videos in their feed posts. Disabled by default to save bandwidth.
+                        </small>
+                      </div>
+                      <div className="form-group col-md-4 m-0">
+                        <label className="d-block">
+                          <i className="fas fa-comments mr-1 text-primary"></i> Chat Video Upload
+                        </label>
+                        <label className="switch ml-1">
+                          <input
+                            type="checkbox"
+                            name="chat_video_enabled"
+                            checked={appdata.chat_video_enabled === 1}
+                            onChange={(e) => {
+                              const val = e.target.checked ? 1 : 0;
+                              setAppdata({ ...appdata, chat_video_enabled: val });
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <small className="form-text text-muted d-block mt-1">
+                          Allow users to send video files in chat. Disabled by default. Uses WhatsApp-style compression.
+                        </small>
+                      </div>
                     </div>
                   </div>
                 </div>
