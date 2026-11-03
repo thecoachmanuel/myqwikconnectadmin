@@ -1448,6 +1448,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
+    // A key is "dummy" only if sandbox mode is explicitly ON or no real key is configured
+    const hasRealKey = secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_');
     const isDummy =
       isSandboxMode ||
       !secretKey ||
@@ -1455,7 +1457,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       secretKey.includes('test_orange_paystack') ||
       secretKey.includes('dummy') ||
       secretKey.includes('sandbox') ||
-      secretKey.length < 25;
+      (!hasRealKey && secretKey.length < 25);
 
     if (isDummy) {
       const sandboxRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1515,17 +1517,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
           rawMsg.toLowerCase().includes('unauthorized') ||
           paystackRes.status === 401
         ) {
-          console.warn(`[Paystack Init] Key was rejected by Paystack (${rawMsg}). Automatically falling back to sandbox mode.`);
-          const fallbackRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-          return jsonResponse({
-            status: true,
-            message: 'Paystack sandbox simulation initialized (fallback)',
-            data: {
-              authorization_url: 'https://checkout.paystack.com',
-              reference: fallbackRef,
-              access_code: 'sandbox_fallback_code',
-            },
-          });
+          errorMsg = `Paystack rejected your API key: "${rawMsg}". Please go to Admin Dashboard → Settings → Paystack and enter your valid live Secret Key (sk_live_...) from dashboard.paystack.com.`;
         }
         return jsonResponse({
           status: false,
@@ -1534,15 +1526,9 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       }
     } catch (err: any) {
       console.error('Paystack initialization error:', err);
-      const fallbackRef = `ORANGE_SANDBOX_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       return jsonResponse({
-        status: true,
-        message: 'Paystack sandbox simulation initialized (offline fallback)',
-        data: {
-          authorization_url: 'https://checkout.paystack.com',
-          reference: fallbackRef,
-          access_code: 'sandbox_fallback_code',
-        },
+        status: false,
+        message: `Paystack is unreachable: ${err.message}. Please check your internet connection or try again.`,
       });
     }
   }
@@ -1578,7 +1564,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     }
 
     const isSandboxMode = db.appdata[0]?.paystack_sandbox_mode === 1;
-    const isDummy = isSandboxMode || !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack') || secretKey.length < 25;
+    const hasRealKeyVerify = secretKey.startsWith('sk_live_') || secretKey.startsWith('sk_test_');
+    const isDummy = isSandboxMode || !secretKey || secretKey === '' || secretKey.includes('test_orange_paystack') || (!hasRealKeyVerify && secretKey.length < 25);
     const isSandboxRef = reference.startsWith('ORANGE_SANDBOX_');
 
     if (isDummy && !isSandboxRef) {
@@ -2968,6 +2955,15 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       const temp = appdata.paystack_secret_key;
       appdata.paystack_secret_key = appdata.paystack_public_key;
       appdata.paystack_public_key = temp;
+    }
+    // Auto-disable sandbox mode when a real live Paystack secret key is saved
+    if (typeof appdata.paystack_secret_key === 'string' &&
+        (appdata.paystack_secret_key.startsWith('sk_live_') || appdata.paystack_secret_key.startsWith('sk_test_')) &&
+        appdata.paystack_secret_key.length > 25) {
+      // Only auto-disable if admin didn't explicitly set sandbox mode in this same request
+      if (!('paystack_sandbox_mode' in fields)) {
+        appdata.paystack_sandbox_mode = 0;
+      }
     }
     appdata.updated_at = new Date().toISOString();
     await commitDb(db);
