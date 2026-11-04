@@ -7,7 +7,7 @@ export const revalidate = 0;
 export default async function PrivacyPolicyPage() {
   const db = await getDb();
   const page = db.pages[0];
-  const appName = db.appdata[0]?.app_name || 'Orange';
+  const appName = db.appdata[0]?.app_name || 'QwikConnect';
   const content = page?.privacy || (db.appdata[0] as any)?.privacypolicy || '';
 
   return (
@@ -164,8 +164,8 @@ export default async function PrivacyPolicyPage() {
           }}>
             <div>
               <strong>Questions or Privacy Concerns?</strong> Contact our Data Protection Officer at{' '}
-              <a href="mailto:privacy@orangeapp.com" style={{ color: '#FE1B03', textDecoration: 'none', fontWeight: '600' }}>
-                privacy@orangeapp.com
+              <a href="mailto:privacy@qwikconnect.ng" style={{ color: '#FE1B03', textDecoration: 'none', fontWeight: '600' }}>
+                privacy@qwikconnect.ng
               </a>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

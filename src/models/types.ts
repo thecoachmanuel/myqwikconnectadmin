@@ -42,6 +42,8 @@ export interface AppData {
   cloudinary_cloud_name?: string;
   cloudinary_api_key?: string;
   cloudinary_api_secret?: string;
+  is_live_video_required?: number;
+  about?: string;
   created_at: string;
   updated_at: string;
 }
@@ -300,6 +302,7 @@ export interface PageContent {
   id: number;
   privacy: string;
   termsofuse: string;
+  about?: string;
   created_at: string;
   updated_at: string;
 }

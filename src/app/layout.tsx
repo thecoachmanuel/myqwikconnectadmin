@@ -9,8 +9,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'Orange - Admin Panel & API Backend',
-  description: 'Orange Dating App Full-stack Backend Server and Admin Dashboard',
+  title: 'QwikConnect - Admin Panel & API Backend',
+  description: 'QwikConnect Dating & Social App Full-stack Backend Server and Admin Dashboard',
   icons: {
     icon: '/asset/img/favicon.png',
   },

@@ -30,6 +30,8 @@ export default function SettingPage() {
     uri_scheme: 'orange',
     play_store_download_link: '',
     app_store_download_link: '',
+    is_live_video_required: 0,
+    about: '',
   });
 
   const [newPassword, setNewPassword] = useState('');
@@ -202,6 +204,12 @@ export default function SettingPage() {
                 </a>
                 <a
                   className={`main-nav-link fw-normal nav-link pointer`}
+                  href="/viewAbout"
+                >
+                  📄 About QwikConnect
+                </a>
+                <a
+                  className={`main-nav-link fw-normal nav-link pointer`}
                   href="/viewPrivacy"
                 >
                   📄 Privacy Policy
@@ -333,6 +341,29 @@ export default function SettingPage() {
                           onChange={(e) => setAppdata({ ...appdata, max_minute_live: e.target.value })}
                           required
                         />
+                      </div>
+                    </div>
+
+                    <div className="form-row mt-3">
+                      <div className="form-group col-md-12 m-0">
+                        <label className="d-block font-weight-bold">
+                          <i className="fas fa-video mr-1 text-warning"></i> Intro Video for Live Verification
+                        </label>
+                        <label className="switch ml-1">
+                          <input
+                            type="checkbox"
+                            name="is_live_video_required"
+                            checked={appdata.is_live_video_required === 1}
+                            onChange={(e) => {
+                              const val = e.target.checked ? 1 : 0;
+                              setAppdata({ ...appdata, is_live_video_required: val });
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <small className="form-text text-muted d-block mt-1">
+                          When disabled (OFF by default), users can submit a live streamer application without recording or uploading an intro video. If enabled, intro video upload is mandatory.
+                        </small>
                       </div>
                     </div>
                   </div>
@@ -550,6 +581,26 @@ export default function SettingPage() {
                         </label>
                         <small className="form-text text-muted d-block mt-1">
                           Allow users to send video files in chat. Disabled by default. Uses WhatsApp-style compression.
+                        </small>
+                      </div>
+                      <div className="form-group col-md-4 m-0">
+                        <label className="d-block">
+                          <i className="fas fa-video mr-1 text-warning"></i> Mandatory Intro Video for Live
+                        </label>
+                        <label className="switch ml-1">
+                          <input
+                            type="checkbox"
+                            name="is_live_video_required"
+                            checked={appdata.is_live_video_required === 1}
+                            onChange={(e) => {
+                              const val = e.target.checked ? 1 : 0;
+                              setAppdata({ ...appdata, is_live_video_required: val });
+                            }}
+                          />
+                          <span className="slider round"></span>
+                        </label>
+                        <small className="form-text text-muted d-block mt-1">
+                          Require intro video for live streamers. Disabled by default (intro video is optional).
                         </small>
                       </div>
                     </div>

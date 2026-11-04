@@ -7,7 +7,7 @@ export const revalidate = 0;
 export default async function TermsOfUsePage() {
   const db = await getDb();
   const page = db.pages[0];
-  const appName = db.appdata[0]?.app_name || 'Orange';
+  const appName = db.appdata[0]?.app_name || 'QwikConnect';
   const content = page?.termsofuse || (db.appdata[0] as any)?.termsofuse || '';
 
   return (
@@ -164,8 +164,8 @@ export default async function TermsOfUsePage() {
           }}>
             <div>
               <strong>Questions about our Terms?</strong> Reach out to our Support Team at{' '}
-              <a href="mailto:support@orangeapp.com" style={{ color: '#FE1B03', textDecoration: 'none', fontWeight: '600' }}>
-                support@orangeapp.com
+              <a href="mailto:support@qwikconnect.ng" style={{ color: '#FE1B03', textDecoration: 'none', fontWeight: '600' }}>
+                support@qwikconnect.ng
               </a>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

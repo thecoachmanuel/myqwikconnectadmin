@@ -101,6 +101,14 @@ const nextConfig = {
         source: '/viewTerms',
         destination: '/api/viewTerms',
       },
+      {
+        source: '/viewAbout',
+        destination: '/api/viewAbout',
+      },
+      {
+        source: '/updateAbout',
+        destination: '/api/updateAbout',
+      },
     ];
   },
 };

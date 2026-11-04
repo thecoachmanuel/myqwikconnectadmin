@@ -1212,7 +1212,14 @@ async function handleAction(request: NextRequest, action: string, method: string
     const appdata = db.appdata[0];
     if (appdata) {
       appdata.is_dating = parseInt(fields.value) || 0;
-      appdata.updated_at = new Date().toISOString();
+      if (fields.about !== undefined) {
+      if (!db.pages || db.pages.length === 0) {
+        db.pages = [{ id: 1, privacy: '', termsofuse: '', about: fields.about } as any];
+      } else {
+        (db.pages[0] as any).about = fields.about;
+      }
+    }
+    appdata.updated_at = new Date().toISOString();
       await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
@@ -1222,7 +1229,14 @@ async function handleAction(request: NextRequest, action: string, method: string
     const appdata = db.appdata[0];
     if (appdata) {
       appdata.is_social_media = parseInt(fields.value) || 0;
-      appdata.updated_at = new Date().toISOString();
+      if (fields.about !== undefined) {
+      if (!db.pages || db.pages.length === 0) {
+        db.pages = [{ id: 1, privacy: '', termsofuse: '', about: fields.about } as any];
+      } else {
+        (db.pages[0] as any).about = fields.about;
+      }
+    }
+    appdata.updated_at = new Date().toISOString();
       await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
@@ -1232,7 +1246,14 @@ async function handleAction(request: NextRequest, action: string, method: string
     const appdata = db.appdata[0];
     if (appdata) {
       appdata.include_fake_user_in_matching = parseInt(fields.value) || 0;
-      appdata.updated_at = new Date().toISOString();
+      if (fields.about !== undefined) {
+      if (!db.pages || db.pages.length === 0) {
+        db.pages = [{ id: 1, privacy: '', termsofuse: '', about: fields.about } as any];
+      } else {
+        (db.pages[0] as any).about = fields.about;
+      }
+    }
+    appdata.updated_at = new Date().toISOString();
       await commitDb(db);
     }
     return jsonResponse({ status: true, message: 'Updated successfully' });
@@ -1272,6 +1293,13 @@ async function handleAction(request: NextRequest, action: string, method: string
     if (isRealKey) {
       // Real key detected — always disable sandbox mode automatically
       appdata.paystack_sandbox_mode = 0;
+    }
+    if (fields.about !== undefined) {
+      if (!db.pages || db.pages.length === 0) {
+        db.pages = [{ id: 1, privacy: '', termsofuse: '', about: fields.about } as any];
+      } else {
+        (db.pages[0] as any).about = fields.about;
+      }
     }
     appdata.updated_at = new Date().toISOString();
     await commitDb(db);
@@ -1343,20 +1371,22 @@ async function handleAction(request: NextRequest, action: string, method: string
       const monthStr = month < 10 ? `0${month}` : `${month}`;
       const dateFormatted = `${year}-${monthStr}-${dayStr}`;
 
-      const usersCount = db.users.filter((u) => {
+      const usersCount = (db.users || []).filter((u) => {
         if (!u.created_at) return false;
-        return u.created_at.startsWith(dateFormatted);
+        const cDate = u.created_at.includes('T') ? u.created_at.split('T')[0] : u.created_at.split(' ')[0];
+        return cDate === dateFormatted;
       }).length;
 
       const postsCount = (db.posts || []).filter((p) => {
         if (!p.created_at) return false;
-        return p.created_at.startsWith(dateFormatted);
+        const cDate = p.created_at.includes('T') ? p.created_at.split('T')[0] : p.created_at.split(' ')[0];
+        return cDate === dateFormatted;
       }).length;
 
       datesWithCount.push({
         date: dateFormatted,
-        usersCount: usersCount || (day % 4 === 0 ? 1 : 0),
-        postsCount: postsCount || (day % 3 === 0 ? 2 : 0),
+        usersCount,
+        postsCount,
       });
     }
 
@@ -1419,6 +1449,33 @@ async function handleAction(request: NextRequest, action: string, method: string
   }
 
   // 19. Pages: viewPrivacy, viewTerms, updatePrivacy, updateTerms
+
+  if (action === 'viewAbout' || action === 'about') {
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '', about: '' };
+    const content = p.about || (db.appdata[0] as any)?.about || (db.appdata[0] as any)?.about_us || '';
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: {
+        about: content,
+        about_us: content,
+      },
+    });
+  }
+
+  if (action === 'updateAbout') {
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', about: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
+    }
+    p.about = fields.about !== undefined ? fields.about : p.about;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).about = p.about;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'About updated successfully', data: p });
+  }
+
   if (action === 'viewPrivacy' || action === 'privacypolicy') {
     const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '' };
     const content = p.privacy || (db.appdata[0] as any)?.privacypolicy || '';

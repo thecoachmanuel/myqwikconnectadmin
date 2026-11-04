@@ -75,19 +75,19 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    // Dynamically load ApexCharts script
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/apexcharts';
-    script.async = true;
-    script.onload = () => {
+    let isMounted = true;
+
+    const initChart = () => {
+      if (!isMounted) return;
       const chartElement = document.querySelector('#chart-dashboard');
-      if (chartElement && (window as any).ApexCharts) {
+      if (chartElement && (window as any).ApexCharts && !chartRef.current) {
         chartElement.innerHTML = '';
         const chart = new (window as any).ApexCharts(chartElement, {
           chart: {
             type: 'area',
             height: 350,
             toolbar: { show: false },
+            animations: { enabled: false },
           },
           stroke: {
             width: 3,
@@ -107,15 +107,28 @@ export default function DashboardPage() {
         loadChartData(month, year);
       }
     };
-    document.body.appendChild(script);
+
+    if ((window as any).ApexCharts) {
+      initChart();
+    } else {
+      let script = document.getElementById('apexcharts-cdn') as HTMLScriptElement;
+      if (!script) {
+        script = document.createElement('script');
+        script.id = 'apexcharts-cdn';
+        script.src = 'https://cdn.jsdelivr.net/npm/apexcharts';
+        script.async = true;
+        document.body.appendChild(script);
+      }
+      script.addEventListener('load', initChart);
+    }
 
     return () => {
+      isMounted = false;
       if (chartRef.current) {
-        chartRef.current.destroy();
+        try {
+          chartRef.current.destroy();
+        } catch (e) {}
         chartRef.current = null;
-      }
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
       }
     };
   }, []);
@@ -161,6 +174,49 @@ export default function DashboardPage() {
         }
       `}</style>
 
+      {/* Dashboard Top QwikConnect Brand Bar */}
+      <div className="d-flex align-items-center justify-content-between mb-4 pb-2 border-bottom flex-wrap gap-2">
+        <div className="d-flex align-items-center">
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #FF6F43 0%, #FE1B03 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: '22px',
+              boxShadow: '0 4px 12px rgba(254, 27, 3, 0.25)',
+              marginRight: '14px',
+            }}
+          >
+            Q
+          </div>
+          <div>
+            <h3 className="mb-0 font-weight-bold" style={{ letterSpacing: '-0.5px' }}>
+              <span
+                style={{
+                  background: 'linear-gradient(135deg, #FF6F43 0%, #FE1B03 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: 800,
+                }}
+              >
+                Qwik
+              </span>
+              <span style={{ color: '#111827', fontWeight: 800 }}>Connect</span>
+              <span className="ms-2 badge bg-light text-dark font-12 font-weight-normal border">
+                Admin Console
+              </span>
+            </h3>
+            <small className="text-muted">Platform Overview &amp; Live Real-time Analytics</small>
+          </div>
+        </div>
+      </div>
+
       <div className="row">
         <div className="col-12">
           <div className="card">
@@ -205,7 +261,7 @@ export default function DashboardPage() {
             </div>
             <div className="card-body">
               <div dir="ltr">
-                <div id="chart-dashboard" className="apex-charts" data-colors="#B754F9,#0acf97"></div>
+                <div id="chart-dashboard" className="apex-charts" style={{ minHeight: '350px', height: '350px' }} data-colors="#B754F9,#0acf97"></div>
               </div>
             </div>
           </div>

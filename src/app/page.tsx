@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [appName, setAppName] = useState('Orange');
+  const [appName, setAppName] = useState('QwikConnect');
   const [showForgotModal, setShowForgotModal] = useState(false);
 
   // Forgot password form fields
@@ -97,7 +97,25 @@ export default function LoginPage() {
           <div className="col-lg-5 col-md-5 col-sm-12">
             <div className="login-box">
               <div className="text-center mb-4">
-                <h3>{appName}</h3>
+                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 900,
+                    fontSize: '36px',
+                    letterSpacing: '-1px',
+                    background: 'linear-gradient(135deg, #FF6F43 0%, #FF4B1F 50%, #FE1B03 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}>Qwik</span>
+                  <span style={{
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 700,
+                    fontSize: '36px',
+                    letterSpacing: '-1px',
+                    color: '#111827',
+                  }}>Connect</span>
+                </div>
+                <div className="text-muted small mt-1">Admin Portal</div>
               </div>
               <div className="card login-card">
                 <div className="card-header">

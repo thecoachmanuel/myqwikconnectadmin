@@ -59,8 +59,11 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
   if (endpoint === 'getSettingData') {
     const appdata = {
       ...(db.appdata[0] || {}),
+      app_name: (db.appdata[0] as any)?.app_name || 'QwikConnect',
       privacypolicy: db.pages[0]?.privacy || (db.appdata[0] as any)?.privacypolicy || '',
       termsofuse: db.pages[0]?.termsofuse || (db.appdata[0] as any)?.termsofuse || '',
+      about: db.pages[0]?.about || (db.appdata[0] as any)?.about || '',
+      is_live_video_required: (db.appdata[0] as any)?.is_live_video_required ?? 0,
       web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
       feed_video_enabled: (db.appdata[0] as any)?.feed_video_enabled ?? 0,
       chat_video_enabled: (db.appdata[0] as any)?.chat_video_enabled ?? 0,
@@ -90,20 +93,28 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     });
   }
 
-  // 1b. updatePages — Admin updates Privacy Policy / Terms of Use
+  // 1b. updatePages — Admin updates Privacy Policy / Terms of Use / About Us
   if (endpoint === 'updatePages') {
     const privacy = fields.privacy?.toString() ?? null;
     const termsofuse = fields.termsofuse?.toString() ?? null;
+    const about = fields.about?.toString() ?? null;
 
     if (!db.pages || db.pages.length === 0) {
-      db.pages = [{ id: 1, privacy: '', termsofuse: '' } as any];
+      db.pages = [{ id: 1, privacy: '', termsofuse: '', about: '' } as any];
     }
 
     if (privacy !== null) (db.pages[0] as any).privacy = privacy;
     if (termsofuse !== null) (db.pages[0] as any).termsofuse = termsofuse;
+    if (about !== null) (db.pages[0] as any).about = about;
+
+    if (db.appdata[0]) {
+      if (privacy !== null) (db.appdata[0] as any).privacypolicy = privacy;
+      if (termsofuse !== null) (db.appdata[0] as any).termsofuse = termsofuse;
+      if (about !== null) (db.appdata[0] as any).about = about;
+    }
 
     await commitDb(db);
-    return jsonResponse({ status: true, message: 'Legal pages updated successfully.' });
+    return jsonResponse({ status: true, message: 'Pages updated successfully.' });
   }
 
   // 2. register
@@ -3316,6 +3327,32 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     if (db.appdata[0]) (db.appdata[0] as any).termsofuse = p.termsofuse;
     await commitDb(db);
     return jsonResponse({ status: true, message: 'Terms of use updated', data: p });
+  }
+
+  if (endpoint === 'viewAbout' || endpoint === 'aboutUs' || endpoint === 'about') {
+    const p = db.pages?.[0] || { id: 1, privacy: '', termsofuse: '', about: '' };
+    const content = p.about || (db.appdata[0] as any)?.about || (db.appdata[0] as any)?.about_us || '';
+    return jsonResponse({
+      status: true,
+      message: 'Fetch successful',
+      data: {
+        about: content,
+        about_us: content,
+      },
+    });
+  }
+
+  if (endpoint === 'updateAbout') {
+    let p = db.pages?.[0];
+    if (!p) {
+      p = { id: 1, privacy: '', termsofuse: '', about: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.pages = [p];
+    }
+    p.about = fields.about !== undefined ? fields.about : p.about;
+    p.updated_at = new Date().toISOString();
+    if (db.appdata[0]) (db.appdata[0] as any).about = p.about;
+    await commitDb(db);
+    return jsonResponse({ status: true, message: 'About updated successfully', data: p });
   }
 
   // 35. getRandomProfile

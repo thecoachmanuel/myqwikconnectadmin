@@ -6,14 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 
 export default function AdminLayout({
   children,
-  title = 'Orange',
+  title = 'QwikConnect',
 }: {
   children: React.ReactNode;
   title?: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [appName, setAppName] = useState('Orange');
+  const [appName, setAppName] = useState('QwikConnect');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -148,7 +148,7 @@ export default function AdminLayout({
   };
 
   const navItems = [
-    { label: 'Dashboard', path: '/index', altPath: '/dashboard', icon: 'fa-tachometer-alt pt-1' },
+    { label: 'Dashboard', path: '/dashboard', altPath: '/index', icon: 'fa-tachometer-alt pt-1' },
     { label: 'Users', path: '/users', altPath: ['/addFakeUser', '/viewuser'], icon: 'fa-users' },
     { label: 'Posts', path: '/posts', icon: 'fa-image' },
     { label: 'Stories', path: '/viewStories', icon: 'fa-compact-disc' },
@@ -170,8 +170,9 @@ export default function AdminLayout({
     { label: 'Notifications', path: '/notifications', icon: 'fa-bell' },
     { label: 'Setting', path: '/setting', icon: 'fa-cog pt-1' },
     { header: 'Pages' },
-    { label: 'Privacy Policy', path: '/viewPrivacy', icon: 'fa-info' },
-    { label: 'Terms Of Use', path: '/viewTerms', icon: 'fa-info' },
+    { label: 'Privacy Policy', path: '/viewPrivacy', icon: 'fa-shield-alt' },
+    { label: 'Terms Of Use', path: '/viewTerms', icon: 'fa-file-contract' },
+    { label: 'About Us', path: '/viewAbout', icon: 'fa-info-circle' },
   ];
 
   return (
@@ -357,10 +358,47 @@ export default function AdminLayout({
                 backgroundColor: '#ffffff',
                 borderBottom: '1px solid #f0f2f5',
                 boxShadow: '0 2px 4px rgba(0,0,0,0.03)',
+                padding: '14px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <Link href="/index">
-                <span className="logo-name">{appName}</span>
+              <Link href="/dashboard" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                <span style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: 900,
+                  fontSize: '22px',
+                  letterSpacing: '-0.8px',
+                  background: 'linear-gradient(135deg, #FF6F43 0%, #FF4B1F 50%, #FE1B03 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}>Qwik</span>
+                <span style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: 700,
+                  fontSize: '22px',
+                  letterSpacing: '-0.8px',
+                  color: '#111827',
+                }}>Connect</span>
+              </Link>
+            </div>
+            <div
+              className="sidebar-brand sidebar-brand-sm"
+              style={{
+                textAlign: 'center',
+                padding: '10px 0',
+              }}
+            >
+              <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+                <span style={{
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  fontWeight: 900,
+                  fontSize: '20px',
+                  background: 'linear-gradient(135deg, #FF6F43 0%, #FF4B1F 50%, #FE1B03 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}>Q</span>
               </Link>
             </div>
             <ul className="sidebar-menu">
