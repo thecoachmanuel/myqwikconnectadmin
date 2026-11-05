@@ -67,6 +67,7 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
       feed_video_enabled: (db.appdata[0] as any)?.feed_video_enabled ?? 0,
       chat_video_enabled: (db.appdata[0] as any)?.chat_video_enabled ?? 0,
+      google_map_key: process.env.GOOGLE_MAP_KEY || (db.appdata[0] as any)?.google_map_key || '',
       paystack_public_key: process.env.PAYSTACK_PUBLIC_KEY || "",
       paystack_secret_key: process.env.PAYSTACK_SECRET_KEY || "",
       paystack_sandbox_mode: process.env.PAYSTACK_SANDBOX_MODE === "1" ? 1 : 0,
@@ -115,6 +116,31 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
 
     await commitDb(db);
     return jsonResponse({ status: true, message: 'Pages updated successfully.' });
+  }
+
+  // 1c. viewPrivacy, viewTerms, viewAbout, fetchPages, privacypolicy, termsOfUse
+  if (
+    endpoint === 'viewPrivacy' ||
+    endpoint === 'privacypolicy' ||
+    endpoint === 'viewTerms' ||
+    endpoint === 'termsOfUse' ||
+    endpoint === 'terms' ||
+    endpoint === 'viewAbout' ||
+    endpoint === 'about' ||
+    endpoint === 'fetchPages'
+  ) {
+    const pageData = {
+      privacy: db.pages?.[0]?.privacy || (db.appdata[0] as any)?.privacypolicy || '',
+      privacypolicy: db.pages?.[0]?.privacy || (db.appdata[0] as any)?.privacypolicy || '',
+      terms: db.pages?.[0]?.termsofuse || (db.appdata[0] as any)?.termsofuse || '',
+      termsofuse: db.pages?.[0]?.termsofuse || (db.appdata[0] as any)?.termsofuse || '',
+      about: db.pages?.[0]?.about || (db.appdata[0] as any)?.about || '',
+    };
+    return jsonResponse({
+      status: true,
+      message: 'fetchSuccessful',
+      data: pageData,
+    });
   }
 
   // 2. register
