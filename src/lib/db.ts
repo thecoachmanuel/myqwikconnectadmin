@@ -3,6 +3,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import dns from 'dns';
 import dbJson from '../../data/db.json';
+import { ABOUT_CONTENT, PRIVACY_CONTENT, TERMS_CONTENT, isLegacyBrandContent } from './legalContent';
 
 // Ensure DNS resolution works reliably for MongoDB Atlas SRV connection strings
 try {
@@ -54,18 +55,77 @@ const defaultData: DatabaseData = dbJson as unknown as DatabaseData;
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
+/**
+ * Version of the QwikConnect About/Privacy/Terms copy stored in the database.
+ * Bumping this triggers a one-off, non-destructive refresh of ONLY those page
+ * fields (user accounts, posts and everything else are left untouched).
+ */
+const CONTENT_BRAND_VERSION = 2;
+
+/**
+ * Overwrites the legal / about page copy with the canonical QwikConnect
+ * write-ups, keeping `pages[0]` and `appdata[0]` in sync.
+ */
+function applyBrandContent(data: DatabaseData): void {
+  if (!Array.isArray(data.pages) || data.pages.length === 0) {
+    data.pages = [{ id: 1, privacy: '', termsofuse: '', about: '' } as any];
+  } else {
+    data.pages = data.pages.map((p) => ({ ...p }));
+  }
+  const page = data.pages[0] as any;
+  page.privacy = PRIVACY_CONTENT;
+  page.termsofuse = TERMS_CONTENT;
+  page.about = ABOUT_CONTENT;
+  page.updated_at = new Date().toISOString();
+
+  if (!Array.isArray(data.appdata) || data.appdata.length === 0) {
+    data.appdata = [{} as any];
+  } else {
+    data.appdata = data.appdata.map((a) => ({ ...a }));
+  }
+  const appdata = data.appdata[0] as any;
+  appdata.privacypolicy = PRIVACY_CONTENT;
+  appdata.termsofuse = TERMS_CONTENT;
+  appdata.about = ABOUT_CONTENT;
+}
+
+/**
+ * Safer variant used for the local file fallback: only replaces page fields
+ * that still carry the old template branding, so admin edits are preserved.
+ */
+function applyBrandContentIfLegacy(data: DatabaseData): void {
+  if (Array.isArray(data.pages) && data.pages.length > 0) {
+    data.pages = data.pages.map((p) => ({ ...p }));
+    const page = data.pages[0] as any;
+    if (isLegacyBrandContent(page.privacy)) page.privacy = PRIVACY_CONTENT;
+    if (isLegacyBrandContent(page.termsofuse)) page.termsofuse = TERMS_CONTENT;
+    if (isLegacyBrandContent(page.about)) page.about = ABOUT_CONTENT;
+  }
+  if (Array.isArray(data.appdata) && data.appdata.length > 0) {
+    data.appdata = data.appdata.map((a) => ({ ...a }));
+    const appdata = data.appdata[0] as any;
+    if (isLegacyBrandContent(appdata.privacypolicy)) appdata.privacypolicy = PRIVACY_CONTENT;
+    if (isLegacyBrandContent(appdata.termsofuse)) appdata.termsofuse = TERMS_CONTENT;
+    if (isLegacyBrandContent(appdata.about)) appdata.about = ABOUT_CONTENT;
+  }
+}
+
 function ensureDataFile(): DatabaseData {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(DB_FILE)) {
-      fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf8');
-      return defaultData;
+      const fresh: DatabaseData = { ...defaultData };
+      applyBrandContentIfLegacy(fresh);
+      fs.writeFileSync(DB_FILE, JSON.stringify(fresh, null, 2), 'utf8');
+      return fresh;
     }
     const raw = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    return { ...defaultData, ...parsed };
+    const merged: DatabaseData = { ...defaultData, ...parsed };
+    applyBrandContentIfLegacy(merged);
+    return merged;
   } catch {
     return defaultData;
   }
@@ -155,6 +215,34 @@ export async function getDb(): Promise<DatabaseData> {
           if (stateDoc && stateDoc.data && stateDoc.seed_version === CURRENT_SEED_VERSION) {
             dbCache = { ...defaultData, ...stateDoc.data };
             lastMongoSync = now;
+
+            // One-off refresh of the About / Privacy / Terms copy so the app
+            // stops showing the old template branding. Only these fields are
+            // touched, and only until the admin saves their own version.
+            if ((stateDoc as any).content_brand_version !== CONTENT_BRAND_VERSION) {
+              applyBrandContent(dbCache);
+              await db.collection('app_data_state').updateOne(
+                { _id: 'master' as any },
+                {
+                  $set: {
+                    data: dbCache,
+                    seed_version: CURRENT_SEED_VERSION,
+                    content_brand_version: CONTENT_BRAND_VERSION,
+                    updatedAt: new Date(),
+                  },
+                }
+              );
+              for (const col of ['pages', 'appdata']) {
+                const items = (dbCache as any)?.[col];
+                if (Array.isArray(items)) {
+                  try {
+                    await db.collection(col).deleteMany({});
+                    if (items.length > 0) await db.collection(col).insertMany(items);
+                  } catch {}
+                }
+              }
+              console.log(`[MongoDB] Refreshed About/Privacy/Terms copy to brand version ${CONTENT_BRAND_VERSION}.`);
+            }
           } else {
             // First time setup or migration to seed_version 4 (Nigerian localization & Naira currency)
             const freshData = defaultData;
@@ -173,10 +261,11 @@ export async function getDb(): Promise<DatabaseData> {
                 coin_rate: '5.00',
               }],
             };
+            applyBrandContent(updatedData);
 
             await db.collection('app_data_state').updateOne(
               { _id: 'master' as any },
-              { $set: { data: updatedData, seed_version: CURRENT_SEED_VERSION, updatedAt: new Date() } },
+              { $set: { data: updatedData, seed_version: CURRENT_SEED_VERSION, content_brand_version: CONTENT_BRAND_VERSION, updatedAt: new Date() } },
               { upsert: true }
             );
 

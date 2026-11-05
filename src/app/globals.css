@@ -23,18 +23,91 @@ body {
   color: white !important;
 }
 
-/* Ensure Admin Sidebar is smoothly scrollable on all viewports */
+/* Admin Sidebar layout.
+   NOTE: the base rule intentionally avoids `!important` on width/left so the
+   template's collapse rules keep working:
+     .sidebar-mini  → icon rail (65px)
+     body.sidebar-gone → slid off-canvas
+     body.sidebar-show → mobile overlay */
 .main-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  max-height: 100vh;
+  width: 250px;
+  overflow: hidden;
+  z-index: 880;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease, left 0.3s ease;
+}
+
+/* Desktop: collapsed icon rail */
+.sidebar-mini .main-sidebar {
+  width: 65px !important;
   position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  height: 100vh !important;
-  max-height: 100vh !important;
-  width: 250px !important;
   overflow: hidden !important;
-  z-index: 880 !important;
-  display: flex !important;
-  flex-direction: column !important;
+}
+
+.sidebar-mini .main-sidebar .sidebar-brand,
+.sidebar-mini .main-sidebar .menu-header {
+  display: none !important;
+}
+
+.sidebar-mini .main-sidebar .sidebar-brand-sm {
+  display: block !important;
+}
+
+/* Hidden state (closed on desktop toggle-off / mobile closed) */
+body.sidebar-gone .main-sidebar {
+  left: -270px !important;
+}
+
+/* Mobile: opened as an overlay above the backdrop */
+body.sidebar-show .main-sidebar {
+  left: 0 !important;
+  width: 250px !important;
+  z-index: 891 !important;
+}
+
+@media (max-width: 1024px) {
+  /* style.css hides the brand on mobile; bring it back when the drawer is open */
+  body.sidebar-show .main-sidebar .sidebar-brand {
+    display: block !important;
+  }
+  body.sidebar-show .main-sidebar .sidebar-brand-sm {
+    display: none !important;
+  }
+}
+
+/* ── Mobile responsiveness helpers ─────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .dataTables_wrapper,
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-content {
+    padding-top: 90px;
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  .card-body {
+    padding: 1rem;
+  }
+
+  .navbar-nav .dropdown-menu {
+    max-width: calc(100vw - 24px);
+  }
+
+  .main-content {
+    padding-top: 84px;
+  }
 }
 
 #sidebar-wrapper {

@@ -6,7 +6,7 @@ import AdminLayout from '@/components/AdminLayout';
 export default function SettingPage() {
   const [activeTab, setActiveTab] = useState('general');
   const [appdata, setAppdata] = useState<any>({
-    app_name: 'Orange',
+    app_name: 'QwikConnect',
     currency: '$',
     min_threshold: 5000,
     coin_rate: '0.006',
@@ -38,11 +38,6 @@ export default function SettingPage() {
   const [userPassword, setUserPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Legal pages state (loaded for quick-view; full editing is at /viewPrivacy and /viewTerms)
-  const [legalPrivacy, setLegalPrivacy] = useState('');
-  const [legalTerms, setLegalTerms] = useState('');
-  const [legalLoading, setLegalLoading] = useState(false);
-
   useEffect(() => {
     fetch('/api/getSettingData')
       .then((res) => res.json())
@@ -51,46 +46,7 @@ export default function SettingPage() {
           setAppdata(data.data.appdata);
         }
       });
-
-    // Load legal page content
-    fetch('/viewPrivacy')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.data?.privacy) setLegalPrivacy(d.data.privacy);
-        else if (d.data?.privacypolicy) setLegalPrivacy(d.data.privacypolicy);
-      })
-      .catch(() => { });
-
-    fetch('/viewTerms')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.data?.termsofuse) setLegalTerms(d.data.termsofuse);
-        else if (d.data?.terms) setLegalTerms(d.data.terms);
-      })
-      .catch(() => { });
   }, []);
-
-  const handleSaveLegalPages = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLegalLoading(true);
-    try {
-      await fetch('/updatePrivacy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ privacy: legalPrivacy }),
-      });
-      await fetch('/updateTerms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ termsofuse: legalTerms }),
-      });
-      alert('Legal pages saved successfully!');
-    } catch (err: any) {
-      alert('Error saving legal pages: ' + err.message);
-    } finally {
-      setLegalLoading(false);
-    }
-  };
 
   const handleSaveAppdata = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,24 +158,6 @@ export default function SettingPage() {
                 >
                   Change Password
                 </a>
-                <a
-                  className={`main-nav-link fw-normal nav-link pointer`}
-                  href="/viewAbout"
-                >
-                  📄 About QwikConnect
-                </a>
-                <a
-                  className={`main-nav-link fw-normal nav-link pointer`}
-                  href="/viewPrivacy"
-                >
-                  📄 Privacy Policy
-                </a>
-                <a
-                  className={`main-nav-link fw-normal nav-link pointer`}
-                  href="/viewTerms"
-                >
-                  📄 Terms of Use
-                </a>
               </div>
             </div>
           </div>
@@ -297,7 +235,7 @@ export default function SettingPage() {
                           onChange={(e) => setAppdata({ ...appdata, google_map_key: e.target.value.trim() })}
                         />
                         <small className="form-text text-muted">
-                          Used to render Google Maps in the Orange app. Enable &quot;Maps JavaScript API&quot;, &quot;Maps SDK for Android&quot;, and &quot;Maps SDK for iOS&quot; in Google Cloud Console.
+                          Used to render Google Maps in the QwikConnect app. Leave it empty to fall back to the Google &quot;development purposes only&quot; map. Enable &quot;Maps JavaScript API&quot;, &quot;Maps SDK for Android&quot;, and &quot;Maps SDK for iOS&quot; in Google Cloud Console.
                         </small>
                       </div>
                     </div>

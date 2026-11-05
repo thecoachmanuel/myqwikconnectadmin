@@ -67,7 +67,12 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
       web_mobile_view: (db.appdata[0] as any)?.web_mobile_view !== undefined ? (db.appdata[0] as any).web_mobile_view : 1,
       feed_video_enabled: (db.appdata[0] as any)?.feed_video_enabled ?? 0,
       chat_video_enabled: (db.appdata[0] as any)?.chat_video_enabled ?? 0,
-      google_map_key: process.env.GOOGLE_MAP_KEY || (db.appdata[0] as any)?.google_map_key || '',
+      // The value saved by the admin wins (even when cleared to an empty
+      // string, which switches the web map back to dev mode). The env var is
+      // only used as a fallback until the admin has saved the setting once.
+      google_map_key: (db.appdata[0] as any)?.google_map_key !== undefined
+        ? ((db.appdata[0] as any)?.google_map_key || '')
+        : (process.env.GOOGLE_MAP_KEY || ''),
       paystack_public_key: process.env.PAYSTACK_PUBLIC_KEY || "",
       paystack_secret_key: process.env.PAYSTACK_SECRET_KEY || "",
       paystack_sandbox_mode: process.env.PAYSTACK_SANDBOX_MODE === "1" ? 1 : 0,
@@ -1862,8 +1867,8 @@ async function handleRequest(request: NextRequest, endpoint: string, method: str
     <h1>${isSuccess ? 'Payment Successful!' : 'Payment Update'}</h1>
     <p>${message}</p>
     ${userDetails ? `<p class="user">${userDetails}</p>` : ''}
-    <p style="font-size:14px;color:#777;margin-bottom:24px;">Your Orange app has processed this payment automatically. You can close this tab and return to the app.</p>
-    <button class="btn" onclick="try{window.close();}catch(e){}">Return to Orange App</button>
+    <p style="font-size:14px;color:#777;margin-bottom:24px;">Your QwikConnect app has processed this payment automatically. You can close this tab and return to the app.</p>
+    <button class="btn" onclick="try{window.close();}catch(e){}">Return to QwikConnect</button>
     <div class="note">This window will close automatically...</div>
   </div>
   <script>
